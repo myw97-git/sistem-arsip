@@ -1,7 +1,7 @@
 # 🏦 Panin Akses - Enterprise Service Portal & Smart AI Archiving System
 
 <p align="center">
-  <img src="logo_panin.png" alt="Panin Bank Logo" width="120" style="border-radius: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); background: white; padding: 10px;"/>
+  <img src="public/logo_panin.png" alt="Panin Bank Logo" width="120" style="border-radius: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); background: white; padding: 10px;"/>
 </p>
 
 <p align="center">
