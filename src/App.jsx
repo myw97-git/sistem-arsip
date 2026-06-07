@@ -187,6 +187,14 @@ const App = () => {
   const [selectedDoc, setSelectedDoc] = useState(null);
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [aiSummary, setAiSummary] = useState('');
+  const [ecmDocuments, setEcmDocuments] = useState(() => {
+    const saved = localStorage.getItem('ecm_documents');
+    return saved ? JSON.parse(saved) : ECM_DOCUMENTS;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('ecm_documents', JSON.stringify(ecmDocuments));
+  }, [ecmDocuments]);
 
   // --- STATE ARSIP STAF ---
   const [archiveSearch, setArchiveSearch] = useState('');
@@ -198,11 +206,70 @@ const App = () => {
   const [isCrmGenerating, setIsCrmGenerating] = useState(false);
   const [crmResponse, setCrmResponse] = useState('');
   const [userChatInput, setUserChatInput] = useState('');
+  const [chatMessages, setChatMessages] = useState([
+    { id: 1, sender: 'customer', text: "Selamat siang, saya mau tanya syarat pengajuan KPR apa saja ya? Dan apakah sertifikat SHM yang saya kirim kemarin sudah terverifikasi di sistem?" }
+  ]);
 
   // --- HANDLERS ---
   const handleTabChange = (tabId) => {
     setActiveTab(tabId);
     setIsMobileMenuOpen(false);
+  };
+
+  const handleEcmUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const sizeFormatted = file.size > 1024 * 1024
+      ? (file.size / (1024 * 1024)).toFixed(1) + ' MB'
+      : (file.size / 1024).toFixed(0) + ' KB';
+
+    let type = 'Umum';
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (ext === 'pdf') type = 'Regulasi';
+    else if (ext === 'docx' || ext === 'doc') type = 'SOP';
+    else if (ext === 'xlsx' || ext === 'xls') type = 'Data';
+    else if (['png', 'jpg', 'jpeg', 'svg'].includes(ext)) type = 'Gambar';
+
+    const newDoc = {
+      id: ecmDocuments.length > 0 ? Math.max(...ecmDocuments.map(d => d.id)) + 1 : 1,
+      title: file.name,
+      type: type,
+      size: sizeFormatted,
+      date: new Date().toISOString().split('T')[0]
+    };
+
+    setEcmDocuments([newDoc, ...ecmDocuments]);
+    alert(`Berkas "${file.name}" berhasil ditambahkan ke repository digital!`);
+    e.target.value = ''; // Reset file input
+  };
+
+  const handleSendMessage = (textToSend = null) => {
+    const msgText = textToSend !== null ? textToSend : userChatInput;
+    if (!msgText.trim()) return;
+
+    const newMsg = {
+      id: chatMessages.length > 0 ? Math.max(...chatMessages.map(m => m.id)) + 1 : 1,
+      sender: 'user',
+      text: msgText
+    };
+
+    setChatMessages(prev => [...prev, newMsg]);
+    if (textToSend === null) {
+      setUserChatInput('');
+    }
+  };
+
+  const handleCrmRefine = () => {
+    if (!crmResponse) return;
+    setUserChatInput(crmResponse);
+    setCrmResponse('');
+  };
+
+  const handleCrmSendReply = () => {
+    if (!crmResponse) return;
+    handleSendMessage(crmResponse);
+    setCrmResponse('');
   };
 
   const handleLogin = (e) => {
@@ -222,7 +289,7 @@ const App = () => {
     setAiSummary('');
     
     try {
-      const response = await fetch('http://127.0.0.1:5000/api/summarize', {
+      const response = await fetch('http://127.0.0.1:5005/api/summarize', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -272,7 +339,7 @@ const App = () => {
     setCrmResponse('');
 
     try {
-      const response = await fetch('http://127.0.0.1:5000/api/crm-chat', {
+      const response = await fetch('http://127.0.0.1:5005/api/crm-chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -739,6 +806,12 @@ const App = () => {
     return matchBox && matchQuery;
   });
 
+  // Filter ecm documents
+  const filteredEcmDocuments = ecmDocuments.filter(doc =>
+    doc.title.toLowerCase().includes(ecmSearch.toLowerCase()) ||
+    doc.type.toLowerCase().includes(ecmSearch.toLowerCase())
+  );
+
   // Ambil list item untuk kotak yang terpilih untuk diprint
   const itemsToPrint = physicalArchives.filter(item => item.boxNumber === printBoxNumber);
 
@@ -1064,10 +1137,20 @@ const App = () => {
               <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm dark:shadow-none border border-slate-100 dark:border-slate-700 overflow-hidden transition-all duration-300">
                 <div className="p-6 border-b border-slate-50 dark:border-slate-700/50 flex justify-between items-center">
                   <h3 className="font-black text-xs uppercase text-slate-400 dark:text-slate-500 tracking-widest">Repository Digital</h3>
-                  <Filter size={16} className="text-slate-300 dark:text-slate-500" />
+                  <div className="flex items-center gap-3">
+                    <label className="cursor-pointer px-3 py-1.5 bg-indigo-50 dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 rounded-xl hover:bg-indigo-100 dark:hover:bg-slate-600 transition flex items-center gap-1 font-bold text-[10px] uppercase">
+                      <Plus size={12} /> Upload Berkas
+                      <input
+                        type="file"
+                        className="hidden"
+                        onChange={handleEcmUpload}
+                      />
+                    </label>
+                    <Filter size={16} className="text-slate-300 dark:text-slate-500 cursor-pointer" />
+                  </div>
                 </div>
                 <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
-                  {ECM_DOCUMENTS.map(doc => (
+                  {filteredEcmDocuments.map(doc => (
                     <div
                       key={doc.id}
                       onClick={() => handleEcmSummarize(doc)}
@@ -1719,9 +1802,17 @@ const App = () => {
 
               {/* Chat Body */}
               <div className="flex-1 p-4 sm:p-8 overflow-y-auto space-y-6 bg-slate-50/30 dark:bg-slate-900/20 scroll-smooth">
-                <div className="max-w-[90%] sm:max-w-[80%] bg-white dark:bg-slate-700 p-4 sm:p-5 rounded-3xl rounded-tl-none text-sm text-slate-700 dark:text-slate-200 shadow-sm border border-slate-100 dark:border-slate-600 leading-relaxed transition-all duration-300">
-                  "Selamat siang, saya mau tanya syarat pengajuan KPR apa saja ya? Dan apakah sertifikat SHM yang saya kirim kemarin sudah terverifikasi di sistem?"
-                </div>
+                {chatMessages.map(msg => (
+                  <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in duration-300`}>
+                    <div className={`max-w-[90%] sm:max-w-[80%] p-4 sm:p-5 rounded-3xl text-sm leading-relaxed border transition-all duration-300 ${
+                      msg.sender === 'user'
+                        ? 'bg-indigo-900 dark:bg-indigo-600 text-white rounded-tr-none border-transparent'
+                        : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-tl-none border-slate-100 dark:border-slate-600 shadow-sm'
+                    }`}>
+                      {msg.text}
+                    </div>
+                  </div>
+                ))}
 
                 {crmResponse && (
                   <div className="flex justify-end animate-in slide-in-from-right-4 duration-500">
@@ -1732,8 +1823,8 @@ const App = () => {
                       </div>
                       <p className="text-sm leading-relaxed italic text-indigo-50 dark:text-slate-300 font-medium">"{crmResponse}"</p>
                       <div className="mt-6 flex flex-col sm:flex-row justify-end gap-3">
-                        <button className="text-[9px] font-black px-4 py-2 bg-white/10 dark:bg-slate-800 rounded-xl hover:bg-white/20 dark:hover:bg-slate-700 uppercase tracking-widest transition text-center">Sempurnakan</button>
-                        <button className="text-[9px] font-black px-4 py-2 bg-orange-500 rounded-xl hover:bg-orange-600 uppercase tracking-widest transition shadow-lg text-center">Kirim Balasan</button>
+                        <button onClick={handleCrmRefine} className="text-[9px] font-black px-4 py-2 bg-white/10 dark:bg-slate-800 rounded-xl hover:bg-white/20 dark:hover:bg-slate-700 uppercase tracking-widest transition text-center">Sempurnakan</button>
+                        <button onClick={handleCrmSendReply} className="text-[9px] font-black px-4 py-2 bg-orange-500 rounded-xl hover:bg-orange-600 uppercase tracking-widest transition shadow-lg text-center">Kirim Balasan</button>
                       </div>
                     </div>
                   </div>
@@ -1748,10 +1839,16 @@ const App = () => {
                     className="w-full bg-slate-50 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-700 rounded-2xl p-4 pr-20 text-sm resize-none focus:ring-2 focus:ring-indigo-900 dark:focus:ring-indigo-400 transition-all outline-none h-24 shadow-inner dark:shadow-none font-medium text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
                     value={userChatInput}
                     onChange={e => setUserChatInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage();
+                      }
+                    }}
                   ></textarea>
                   <div className="absolute right-4 bottom-4 flex gap-2">
                     <button className="w-10 h-10 sm:w-12 sm:h-12 bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 rounded-2xl flex items-center justify-center hover:bg-slate-200 dark:hover:bg-slate-600 transition"><Paperclip size={20} /></button>
-                    <button className="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-900 dark:bg-indigo-600 text-white rounded-2xl flex items-center justify-center hover:bg-black dark:hover:bg-indigo-700 shadow-xl dark:shadow-none transition active:scale-90"><Send size={20} /></button>
+                    <button onClick={() => handleSendMessage()} className="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-900 dark:bg-indigo-600 text-white rounded-2xl flex items-center justify-center hover:bg-black dark:hover:bg-indigo-700 shadow-xl dark:shadow-none transition active:scale-90"><Send size={20} /></button>
                   </div>
                 </div>
               </div>
