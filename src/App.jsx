@@ -113,7 +113,7 @@ const App = () => {
 
   useEffect(() => {
     const handleScroll = () => {
-      if (window.scrollY > 20) {
+      if (window.scrollY > 40) {
         setIsHeaderScrolled(true);
       } else {
         setIsHeaderScrolled(false);
@@ -874,11 +874,10 @@ const App = () => {
       {/* Main Content */}
       <main className="flex-1 md:ml-64 p-4 sm:p-6 md:p-8 min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-300 w-full">
 
-        {/* Header */}
-        <header className={`flex justify-between items-center sticky top-2 sm:top-4 z-40 transition-all duration-300 ${
+        <header className={`flex justify-between items-center sticky top-2 sm:top-4 z-40 transition-all duration-300 py-3 sm:py-4 px-4 sm:px-6 mb-6 sm:mb-8 ${
           isHeaderScrolled
-            ? 'py-2.5 px-4 sm:px-6 mb-4 bg-white/95 dark:bg-slate-800/95 backdrop-blur-md shadow-md rounded-2xl border border-slate-200 dark:border-slate-700'
-            : 'py-4 sm:py-6 px-4 sm:px-6 mb-6 sm:mb-8 bg-white dark:bg-slate-800 rounded-3xl shadow-sm dark:shadow-none border border-slate-100 dark:border-slate-700'
+            ? 'bg-white/90 dark:bg-slate-800/90 backdrop-blur-md shadow-md rounded-2xl border border-slate-200 dark:border-slate-700'
+            : 'bg-white dark:bg-slate-800 rounded-3xl shadow-sm dark:shadow-none border border-slate-100 dark:border-slate-700'
         }`}>
           <div className="flex items-center gap-3">
             {/* Hamburger Button for Mobile */}
