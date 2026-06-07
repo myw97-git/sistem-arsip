@@ -58,7 +58,7 @@ Berikan langsung 3 poin ringkasan operasional penting dalam Bahasa Indonesia yan
 
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent`,
+      `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent`,
       {
         method: 'POST',
         headers: {
@@ -123,7 +123,7 @@ Aturan Balasan:
 
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent`,
+      `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent`,
       {
         method: 'POST',
         headers: {
