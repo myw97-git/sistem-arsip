@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
-import { 
-  Search, FileText, Send, Sparkles, MessageSquare, Clock, 
-  User, Layout, ChevronRight, Loader2, Database, Info, Filter, 
-  Download, BarChart3, CheckCircle2, Lock, 
-  Eye, EyeOff, Paperclip, Sun, Moon
+import {
+  Search, FileText, Send, Sparkles, MessageSquare, Clock,
+  User, Layout, ChevronRight, Loader2, Database, Info, Filter,
+  Download, BarChart3, CheckCircle2, Lock,
+  Eye, EyeOff, Paperclip, Sun, Moon, Menu, X, Plus, Trash2, Printer, ArrowLeft,
+  Upload, Edit2, RotateCcw
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 // --- DATA MOCKUP (Diletakkan di luar komponen agar tidak re-render) ---
 const ECM_DOCUMENTS = [
@@ -19,6 +21,71 @@ const CUSTOMER_ARCHIVES = [
   { id: 102, name: 'Andi Setiawan', doc: 'SHM_Agunan_KPR_No442.pdf', cat: 'Agunan', cif: 'CIF99201' },
   { id: 103, name: 'Budi Santoso', doc: 'Formulir_Pembukaan_Rekening.pdf', cat: 'Administrasi', cif: 'CIF88273' },
   { id: 104, name: 'Siti Aminah', doc: 'Slip_Gaji_Nasabah_Q4.pdf', cat: 'Finansial', cif: 'CIF77210' },
+];
+
+// Database Master Klasifikasi (Lookup) untuk Auto-fill Form
+const CLASSIFICATION_MASTER = [
+  { code: 'AK 99.01', title: 'Laporan Neraca', defaultJra: 5 },
+  { code: 'JB 99.04', title: 'Translog', defaultJra: 10 },
+  { code: 'JB 99.01', title: 'Maintenance Report', defaultJra: 5 },
+  { code: 'JB 99.16', title: 'Laporan Deposito', defaultJra: 5 },
+  { code: 'JB 99.12', title: 'Daftar Suku Bunga Deposito', defaultJra: 5 },
+  { code: 'TR 99.01', title: 'Bloter Valas', defaultJra: 5 },
+  { code: 'JB 99.13', title: 'Daftar Hitam Nasabah', defaultJra: 5 },
+  { code: 'TR 11.02', title: 'Receipt Form', defaultJra: 5 },
+  { code: 'JB 99.07', title: 'Laporan Pengisian ATM', defaultJra: 5 },
+  { code: 'JB 99.08 (SKN)', codeActual: 'JB 99.08', title: 'SKN', defaultJra: 5 },
+  { code: 'JB 99.08 (RTGS)', codeActual: 'JB 99.08', title: 'RTGS', defaultJra: 5 },
+  { code: 'JB 10.01', title: 'Kliring', defaultJra: 5 },
+  { code: 'JB 12.00', title: 'Payment Point', defaultJra: 5 },
+  { code: 'JB 20.02 (ATM)', codeActual: 'JB 20.02', title: 'ATM', defaultJra: 5 },
+  { code: 'JB 20.02 (LOG)', codeActual: 'JB 20.02', title: 'LOG PENGGUNAAN KUNCI ATM', defaultJra: 5 },
+  { code: 'JB 10.14 (PINBUK)', codeActual: 'JB 10.14', title: 'TITIPAN PINBUK', defaultJra: 5 },
+  { code: 'JB 10.14 (KLIRING)', codeActual: 'JB 10.14', title: 'TITIPAN KLIRING', defaultJra: 5 },
+  { code: 'JB 10.14 (KLR)', codeActual: 'JB 10.14', title: 'KLIRING', defaultJra: 5 },
+  { code: 'AK 03.01 (TESKEY)', codeActual: 'AK 03.01', title: 'TESKEY', defaultJra: 5 },
+  { code: 'AK 03.01 (SKN)', codeActual: 'AK 03.01', title: 'SKN', defaultJra: 5 },
+  { code: 'AK 03.01 (BI FAST)', codeActual: 'AK 03.01', title: 'BI FAST', defaultJra: 5 },
+];
+
+// Database Master Cabang Panin Bank Daerah Bandung
+const BANDUNG_BRANCHES = [
+  { name: 'Setiabudi', code: 'BAN/BSE' },
+  { name: 'Dago', code: 'BAN/DGO' },
+  { name: 'Abdurahman Saleh', code: 'BAN/ABS' },
+  { name: 'Surya Sumantri / Sutri', code: 'BAN/STI' },
+  { name: 'Gardujati', code: 'BAN/GDJ' },
+  { name: 'Andir', code: 'BAN/ADR' },
+  { name: 'Festival Citylink / Felink', code: 'BAN/FCL' },
+  { name: 'Otista', code: 'BAN/OTS' },
+  { name: 'Banceuy', code: 'BAN/BCY' },
+  { name: 'Asia Afrika', code: 'BAN/ASA' },
+  { name: 'Buah Batu', code: 'BAN/BBT' },
+  { name: 'Taman Kopo Indah', code: 'BAN/TKI' },
+  { name: 'Kopo Mas', code: 'BAN/KMS' },
+];
+
+// Seed data awal dari gambar Excel yang dikirimkan user
+const INITIAL_PHYSICAL_ARCHIVES = [
+  { id: 1, classificationCode: 'AK 99.01', title: 'Laporan Neraca', startDate: '2020-01-05', endDate: '2020-08-20', jra: 5, destructionYear: 2025, mediaNumber: 1, boxNumber: '1', jenisArsip: 'Asli', unitKerja: 'IT 06.01', kategoriUnit: 'BAN/BSE' },
+  { id: 2, classificationCode: 'AK 99.01', title: 'Laporan Neraca', startDate: '2020-09-01', endDate: '2020-11-30', jra: 5, destructionYear: 2025, mediaNumber: 2, boxNumber: '1', jenisArsip: 'Asli', unitKerja: 'IT 06.01', kategoriUnit: 'BAN/BSE' },
+  { id: 3, classificationCode: 'AK 99.01', title: 'Laporan Neraca', startDate: '2020-12-02', endDate: '2020-12-30', jra: 5, destructionYear: 2025, mediaNumber: 3, boxNumber: '1', jenisArsip: 'Asli', unitKerja: 'IT 06.01', kategoriUnit: 'BAN/BSE' },
+  { id: 4, classificationCode: 'JB 99.04', title: 'Translog', startDate: '2020-01-05', endDate: '2020-03-30', jra: 10, destructionYear: 2030, mediaNumber: 1, boxNumber: '2', jenisArsip: 'Asli', unitKerja: 'IT 06.01', kategoriUnit: 'BAN/BSE' },
+  { id: 5, classificationCode: 'JB 99.04', title: 'Translog', startDate: '2020-04-01', endDate: '2020-07-30', jra: 10, destructionYear: 2030, mediaNumber: 2, boxNumber: '2', jenisArsip: 'Asli', unitKerja: 'IT 06.01', kategoriUnit: 'BAN/BSE' },
+  { id: 6, classificationCode: 'JB 99.04', title: 'Translog', startDate: '2020-08-01', endDate: '2020-12-30', jra: 10, destructionYear: 2030, mediaNumber: 3, boxNumber: '2', jenisArsip: 'Asli', unitKerja: 'IT 06.01', kategoriUnit: 'BAN/BSE' },
+  { id: 7, classificationCode: 'JB 99.01', title: 'Maintenance Report', startDate: '2020-01-05', endDate: '2020-12-30', jra: 5, destructionYear: 2025, mediaNumber: 1, boxNumber: '3', jenisArsip: 'Copy', unitKerja: 'IT 06.01', kategoriUnit: 'BAN/BSE' },
+  { id: 8, classificationCode: 'JB 99.16', title: 'Laporan Deposito', startDate: '2020-01-05', endDate: '2020-04-29', jra: 5, destructionYear: 2025, mediaNumber: 2, boxNumber: '3', jenisArsip: 'Asli', unitKerja: 'IT 06.01', kategoriUnit: 'BAN/BSE' },
+  { id: 9, classificationCode: 'JB 99.16', title: 'Laporan Deposito', startDate: '2020-05-01', endDate: '2020-09-30', jra: 5, destructionYear: 2025, mediaNumber: 3, boxNumber: '3', jenisArsip: 'Asli', unitKerja: 'IT 06.01', kategoriUnit: 'BAN/BSE' },
+  { id: 10, classificationCode: 'JB 99.16', title: 'Laporan Deposito', startDate: '2020-10-01', endDate: '2020-12-30', jra: 5, destructionYear: 2025, mediaNumber: 4, boxNumber: '3', jenisArsip: 'Asli', unitKerja: 'IT 06.01', kategoriUnit: 'BAN/BSE' },
+  { id: 11, classificationCode: 'JB 99.12', title: 'Daftar Suku Bunga Deposito', startDate: '2020-01-05', endDate: '2020-12-30', jra: 5, destructionYear: 2025, mediaNumber: 5, boxNumber: '3', jenisArsip: 'Asli', unitKerja: 'IT 06.01', kategoriUnit: 'BAN/BSE' },
+  { id: 12, classificationCode: 'TR 99.01', title: 'Bloter Valas', startDate: '2020-01-05', endDate: '2020-12-30', jra: 5, destructionYear: 2025, mediaNumber: 1, boxNumber: '4', jenisArsip: 'Asli', unitKerja: 'IT 06.01', kategoriUnit: 'BAN/BSE' },
+  { id: 13, classificationCode: 'JB 99.13', title: 'Daftar Hitam Nasabah', startDate: '2020-01-05', endDate: '2020-12-30', jra: 5, destructionYear: 2025, mediaNumber: 2, boxNumber: '4', jenisArsip: 'Asli', unitKerja: 'IT 06.01', kategoriUnit: 'BAN/BSE' },
+  { id: 14, classificationCode: 'TR 11.02', title: 'Receipt Form', startDate: '2020-01-05', endDate: '2020-12-30', jra: 5, destructionYear: 2025, mediaNumber: 3, boxNumber: '4', jenisArsip: 'Copy', unitKerja: 'IT 06.01', kategoriUnit: 'BAN/BSE' },
+  { id: 15, classificationCode: 'JB 99.07', title: 'Laporan Pengisian ATM', startDate: '2020-01-05', endDate: '2020-12-30', jra: 5, destructionYear: 2025, mediaNumber: 4, boxNumber: '4', jenisArsip: 'Asli', unitKerja: 'IT 06.01', kategoriUnit: 'BAN/BSE' },
+  { id: 16, classificationCode: 'JB 99.08', title: 'SKN', startDate: '2020-01-05', endDate: '2020-12-30', jra: 5, destructionYear: 2025, mediaNumber: 1, boxNumber: '5', jenisArsip: 'Asli', unitKerja: 'IT 06.01', kategoriUnit: 'BAN/BSE' },
+  { id: 17, classificationCode: 'JB 99.08', title: 'RTGS', startDate: '2020-01-05', endDate: '2020-12-30', jra: 5, destructionYear: 2025, mediaNumber: 2, boxNumber: '5', jenisArsip: 'Asli', unitKerja: 'IT 06.01', kategoriUnit: 'BAN/BSE' },
+  { id: 18, classificationCode: 'JB 10.01', title: 'Kliring', startDate: '2020-01-05', endDate: '2020-12-30', jra: 5, destructionYear: 2025, mediaNumber: 3, boxNumber: '5', jenisArsip: 'Asli', unitKerja: 'IT 06.01', kategoriUnit: 'BAN/BSE' },
+  { id: 19, classificationCode: 'JB 12.00', title: 'Payment Point', startDate: '2020-01-05', endDate: '2020-12-30', jra: 5, destructionYear: 2025, mediaNumber: 4, boxNumber: '5', jenisArsip: 'Asli', unitKerja: 'IT 06.01', kategoriUnit: 'BAN/BSE' },
 ];
 
 const App = () => {
@@ -41,6 +108,23 @@ const App = () => {
     }
   }, [darkMode]);
 
+  // --- STATE & LISTENER UNTUK STICKY HEADER MENGECEK SCROLL ---
+  const [isHeaderScrolled, setIsHeaderScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.scrollY > 20) {
+        setIsHeaderScrolled(true);
+      } else {
+        setIsHeaderScrolled(false);
+      }
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
   // --- STATE AUTH ---
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [employeeId, setEmployeeId] = useState('');
@@ -49,8 +133,54 @@ const App = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState('');
 
-  // --- STATE NAVIGASI ---
+  // --- STATE NAVIGASI & MOBILE DRAWER ---
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // --- STATE ARSIP SUB-TAB (Nasabah vs Dus Fisik) ---
+  const [archiveSubTab, setArchiveSubTab] = useState('nasabah'); // 'nasabah' atau 'fisik'
+
+  // --- STATE DATABASE ARSIP FISIK ---
+  const [physicalArchives, setPhysicalArchives] = useState(() => {
+    const saved = localStorage.getItem('physical_archives');
+    return saved ? JSON.parse(saved) : INITIAL_PHYSICAL_ARCHIVES;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('physical_archives', JSON.stringify(physicalArchives));
+  }, [physicalArchives]);
+
+  // --- STATE FORM INPUT ARSIP FISIK ---
+  const [editingItem, setEditingItem] = useState(null);
+  const [newClassification, setNewClassification] = useState('');
+  const [newTitle, setNewTitle] = useState('');
+  const [newStartDate, setNewStartDate] = useState('');
+  const [newEndDate, setNewEndDate] = useState('');
+  const [newJra, setNewJra] = useState('5');
+  const [newMediaNumber, setNewMediaNumber] = useState('');
+  const [newBoxNumber, setNewBoxNumber] = useState('');
+  const [newUnitCategory, setNewUnitCategory] = useState('BAN/BSE');
+  const [classMode, setClassMode] = useState('select'); // 'select' atau 'manual'
+  const [selectedPreset, setSelectedPreset] = useState('');
+  const [newDestructionYear, setNewDestructionYear] = useState('');
+
+  // Auto-hitung tahun musnah di form input
+  useEffect(() => {
+    if (newEndDate && newJra) {
+      const parts = newEndDate.split('-');
+      const year = parseInt(parts[0], 10);
+      if (!isNaN(year)) {
+        setNewDestructionYear(year + parseInt(newJra, 10));
+      }
+    } else {
+      setNewDestructionYear('');
+    }
+  }, [newEndDate, newJra]);
+
+  // --- STATE FILTER & SELECTION ARSIP FISIK ---
+  const [filterBoxNumber, setFilterBoxNumber] = useState('');
+  const [searchPhysicalQuery, setSearchPhysicalQuery] = useState('');
+  const [printBoxNumber, setPrintBoxNumber] = useState(null); // Menyimpan no kotak yang akan dicetak
 
   // --- STATE SMART ECM ---
   const [ecmSearch, setEcmSearch] = useState('');
@@ -70,6 +200,11 @@ const App = () => {
   const [userChatInput, setUserChatInput] = useState('');
 
   // --- HANDLERS ---
+  const handleTabChange = (tabId) => {
+    setActiveTab(tabId);
+    setIsMobileMenuOpen(false);
+  };
+
   const handleLogin = (e) => {
     e.preventDefault();
     if (!employeeId) return setLoginError('ID Karyawan wajib diisi.');
@@ -86,7 +221,7 @@ const App = () => {
     setIsSummarizing(true);
     setAiSummary('');
     setTimeout(() => {
-      setAiSummary(`Berdasarkan analisis AI terhadap dokumen "${doc.title}", poin pentingnya adalah: (1) Perubahan suku bunga menjadi 5.5% fixed 3 tahun, (2) Persyaratan dokumen agunan harus asli dan tersertifikasi, (3) Waktu pemrosesan dipangkas menjadi 3 hari kerja melalui sistem otomasi.`);
+      setAiSummary(`Berdasarkan analisis AI terhadap dokumen "${doc.title}", poin pentingnya adalah: (1) Suku bunga KPR disesuaikan menjadi 5.5% fixed 3 tahun, (2) Semua kelengkapan dokumen jaminan/agunan wajib diverifikasi keasliannya oleh tim hukum, (3) Proses SLA pemrosesan dipercepat hingga maksimal 3 hari kerja.`);
       setIsSummarizing(false);
     }, 2000);
   };
@@ -97,12 +232,12 @@ const App = () => {
     setFoundArchives([]);
     setArchiveInsight('');
     setTimeout(() => {
-      const results = CUSTOMER_ARCHIVES.filter(d => 
-        d.name.toLowerCase().includes(archiveSearch.toLowerCase()) || 
+      const results = CUSTOMER_ARCHIVES.filter(d =>
+        d.name.toLowerCase().includes(archiveSearch.toLowerCase()) ||
         d.cif.toLowerCase().includes(archiveSearch.toLowerCase())
       );
       setFoundArchives(results);
-      if(results.length > 0) {
+      if (results.length > 0) {
         setArchiveInsight(`AI Insight: Nasabah atas nama ${archiveSearch} memiliki profil risiko rendah. Dokumen agunan SHM terdeteksi valid. AI merekomendasikan verifikasi ulang untuk dokumen KTP yang akan kadaluarsa dalam 6 bulan.`);
       }
       setIsArchiveSearching(false);
@@ -117,26 +252,491 @@ const App = () => {
     }, 2000);
   };
 
+  // --- HELPERS & HANDLERS FOR EXCEL IMPORT & AUTO-CLEANING ---
+  const parseExcelDate = (val) => {
+    if (!val) return '';
+    
+    if (val instanceof Date) {
+      const y = val.getFullYear();
+      const m = String(val.getMonth() + 1).padStart(2, '0');
+      const d = String(val.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    if (typeof val === 'number') {
+      const date = new Date((val - 25569) * 86400 * 1000);
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    const str = String(val).trim();
+    
+    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+      return str;
+    }
+    
+    const parts = str.split(/[/-]/);
+    if (parts.length === 3) {
+      if (parts[0].length === 4) {
+        return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+      }
+      if (parts[2].length === 4) {
+        return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+      }
+    }
+    
+    const parsed = new Date(str);
+    if (!isNaN(parsed.getTime())) {
+      const y = parsed.getFullYear();
+      const m = String(parsed.getMonth() + 1).padStart(2, '0');
+      const d = String(parsed.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    return '';
+  };
+
+  const cleanImportedData = (row, nextId) => {
+    const cleanKeys = {};
+    Object.keys(row).forEach(key => {
+      const normalizedKey = key.toLowerCase().replace(/\s+/g, '');
+      cleanKeys[normalizedKey] = row[key];
+    });
+
+    let classificationCode = cleanKeys['kodeklasifikasi'] || cleanKeys['klasifikasi'] || cleanKeys['kode'] || cleanKeys['classificationcode'] || '';
+    classificationCode = String(classificationCode).trim().toUpperCase();
+
+    let title = cleanKeys['masalah'] || cleanKeys['judul'] || cleanKeys['judularsip'] || cleanKeys['namadokumen'] || cleanKeys['title'] || '';
+    title = String(title).trim();
+
+    let startDate = cleanKeys['tanggalawal'] || cleanKeys['tglawal'] || cleanKeys['mulai'] || cleanKeys['startdate'] || '';
+    startDate = parseExcelDate(startDate);
+
+    let endDate = cleanKeys['tanggalakhir'] || cleanKeys['tglakhir'] || cleanKeys['selesai'] || cleanKeys['enddate'] || '';
+    endDate = parseExcelDate(endDate);
+
+    let jraRaw = cleanKeys['jra'] || cleanKeys['retensi'] || cleanKeys['jangkawaktu'] || '';
+    let jra = 5;
+    if (jraRaw !== '') {
+      const parsedJra = parseInt(String(jraRaw).replace(/\D/g, ''), 10);
+      if (!isNaN(parsedJra)) {
+        jra = parsedJra;
+      }
+    } else {
+      const preset = CLASSIFICATION_MASTER.find(c => {
+        const codeNorm = c.code.toUpperCase().replace(/\s+/g, '');
+        const targetNorm = classificationCode.replace(/\s+/g, '');
+        return codeNorm.includes(targetNorm) || targetNorm.includes(codeNorm);
+      });
+      if (preset) {
+        jra = preset.defaultJra;
+      }
+    }
+
+    let destructionYearRaw = cleanKeys['tahunmusnah'] || cleanKeys['musnah'] || cleanKeys['destructionyear'] || '';
+    let destructionYear = 0;
+    if (destructionYearRaw !== '') {
+      const parsedDY = parseInt(String(destructionYearRaw).replace(/\D/g, ''), 10);
+      if (!isNaN(parsedDY)) {
+        destructionYear = parsedDY;
+      }
+    }
+    if (!destructionYear && endDate) {
+      const year = parseInt(endDate.split('-')[0], 10);
+      if (!isNaN(year)) {
+        destructionYear = year + jra;
+      }
+    }
+
+    let mediaNumberRaw = cleanKeys['nomediasimpan'] || cleanKeys['nomedia'] || cleanKeys['media'] || cleanKeys['medianumber'] || '';
+    let mediaNumber = 1;
+    if (mediaNumberRaw !== '') {
+      const parsedMN = parseInt(String(mediaNumberRaw).replace(/\D/g, ''), 10);
+      if (!isNaN(parsedMN)) {
+        mediaNumber = parsedMN;
+      }
+    }
+
+    let boxNumberRaw = cleanKeys['nokotak'] || cleanKeys['nobox'] || cleanKeys['kotak'] || cleanKeys['box'] || cleanKeys['boxnumber'] || '';
+    let boxNumber = String(boxNumberRaw).trim();
+    if (!boxNumber) boxNumber = '1';
+
+    let jenisArsip = cleanKeys['jenisarsip'] || cleanKeys['jenis'] || cleanKeys['status'] || cleanKeys['jenis_arsip'] || 'Asli';
+    jenisArsip = String(jenisArsip).trim();
+    if (jenisArsip.toLowerCase() === 'asli') jenisArsip = 'Asli';
+    else if (jenisArsip.toLowerCase() === 'copy') jenisArsip = 'Copy';
+    else if (jenisArsip.toLowerCase() === 'penting') jenisArsip = 'Penting';
+    else jenisArsip = 'Asli';
+
+    let cabangRaw = cleanKeys['cabang'] || cleanKeys['kodecabang'] || cleanKeys['kategoriunit'] || cleanKeys['unit'] || cleanKeys['branch'] || '';
+    cabangRaw = String(cabangRaw).trim().toLowerCase();
+    
+    let kategoriUnit = 'BAN/BSE';
+    if (cabangRaw) {
+      const matchedBranch = BANDUNG_BRANCHES.find(b => {
+        const nameNorm = b.name.toLowerCase();
+        const codeNorm = b.code.toLowerCase();
+        return nameNorm.includes(cabangRaw) || 
+               cabangRaw.includes(nameNorm) || 
+               codeNorm.includes(cabangRaw) || 
+               cabangRaw.includes(codeNorm);
+      });
+      if (matchedBranch) {
+        kategoriUnit = matchedBranch.code;
+      }
+    }
+
+    if (!classificationCode && title) {
+      const preset = CLASSIFICATION_MASTER.find(c => {
+        const titleNorm = c.title.toLowerCase().replace(/\s+/g, '');
+        const targetTitleNorm = title.toLowerCase().replace(/\s+/g, '');
+        return titleNorm.includes(targetTitleNorm) || targetTitleNorm.includes(titleNorm);
+      });
+      if (preset) {
+        classificationCode = preset.codeActual || preset.code;
+      }
+    }
+
+    if (!title && classificationCode) {
+      const preset = CLASSIFICATION_MASTER.find(c => {
+        const codeNorm = (c.codeActual || c.code).toUpperCase().replace(/\s+/g, '');
+        const targetNorm = classificationCode.replace(/\s+/g, '');
+        return codeNorm === targetNorm;
+      });
+      if (preset) {
+        title = preset.title;
+      } else {
+        title = 'Arsip Klasifikasi ' + classificationCode;
+      }
+    }
+
+    if (!classificationCode) classificationCode = 'LAIN-LAIN';
+    if (!title) title = 'Dokumen Arsip Tanpa Judul';
+    if (!endDate) {
+      const today = new Date();
+      endDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      if (!destructionYear) {
+        destructionYear = today.getFullYear() + jra;
+      }
+    }
+
+    return {
+      id: nextId,
+      classificationCode,
+      title,
+      startDate,
+      endDate,
+      jra,
+      destructionYear,
+      mediaNumber,
+      boxNumber,
+      jenisArsip,
+      kategoriUnit
+    };
+  };
+
+  const handleExcelImport = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = evt.target.result;
+        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        
+        const rawRows = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+        
+        if (rawRows.length === 0) {
+          alert('File Excel kosong atau tidak terbaca.');
+          return;
+        }
+
+        let currentMaxId = physicalArchives.length > 0 ? Math.max(...physicalArchives.map(a => a.id)) : 0;
+        const cleanedRows = rawRows.map((row, idx) => {
+          return cleanImportedData(row, currentMaxId + idx + 1);
+        });
+
+        setPhysicalArchives(prev => [...cleanedRows, ...prev]);
+        alert(`Berhasil mengimpor ${cleanedRows.length} data arsip fisik baru dari Excel! Data telah dibersihkan secara otomatis.`);
+      } catch (err) {
+        console.error(err);
+        alert('Terjadi kesalahan saat memproses file Excel. Pastikan format file benar.');
+      }
+      e.target.value = '';
+    };
+
+    reader.readAsArrayBuffer(file);
+  };
+
+  // --- HANDLER EDIT ARSIP FISIK ---
+  const handleStartEdit = (item) => {
+    setEditingItem(item);
+    setClassMode('manual');
+    setNewClassification(item.classificationCode);
+    setNewTitle(item.title);
+    setNewStartDate(item.startDate || '');
+    setNewEndDate(item.endDate || '');
+    setNewJra(String(item.jra));
+    setNewMediaNumber(String(item.mediaNumber));
+    setNewBoxNumber(String(item.boxNumber));
+    setNewUnitCategory(item.kategoriUnit);
+    
+    // Scroll secara halus ke bagian form (berguna di HP)
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingItem(null);
+    setNewClassification('');
+    setNewTitle('');
+    setNewStartDate('');
+    setNewEndDate('');
+    setSelectedPreset('');
+    setNewJra('5');
+    setNewMediaNumber('');
+    setNewBoxNumber('');
+    setNewUnitCategory('BAN/BSE');
+    setClassMode('select');
+  };
+
+  // --- HANDLER ARSIP FISIK BARU / UPDATE ---
+  const handleAddPhysicalArchive = (e) => {
+    e.preventDefault();
+    if (!newClassification || !newTitle || !newEndDate || !newMediaNumber || !newBoxNumber) {
+      alert('Harap lengkapi kolom bertanda bintang (*).');
+      return;
+    }
+
+    const year = parseInt(newEndDate.split('-')[0], 10);
+    const calculatedDestructionYear = year + parseInt(newJra, 10);
+
+    if (editingItem) {
+      // Mode Edit: Update item yang sudah ada
+      const updatedArchives = physicalArchives.map(item => {
+        if (item.id === editingItem.id) {
+          return {
+            ...item,
+            classificationCode: newClassification.toUpperCase(),
+            title: newTitle,
+            startDate: newStartDate,
+            endDate: newEndDate,
+            jra: parseInt(newJra, 10),
+            destructionYear: calculatedDestructionYear,
+            mediaNumber: parseInt(newMediaNumber, 10),
+            boxNumber: String(newBoxNumber).trim(),
+            jenisArsip: item.jenisArsip || 'Asli', // Pertahankan jenis arsip yang sudah ada
+            kategoriUnit: newUnitCategory.toUpperCase()
+          };
+        }
+        return item;
+      });
+      
+      setPhysicalArchives(updatedArchives);
+      handleCancelEdit();
+      alert('Data arsip fisik berhasil diperbarui!');
+    } else {
+      // Mode Tambah Baru
+      const newId = physicalArchives.length > 0 ? Math.max(...physicalArchives.map(a => a.id)) + 1 : 1;
+      const newItem = {
+        id: newId,
+        classificationCode: newClassification.toUpperCase(),
+        title: newTitle,
+        startDate: newStartDate,
+        endDate: newEndDate,
+        jra: parseInt(newJra, 10),
+        destructionYear: calculatedDestructionYear,
+        mediaNumber: parseInt(newMediaNumber, 10),
+        boxNumber: String(newBoxNumber).trim(),
+        jenisArsip: 'Asli', // Default jenis arsip untuk data baru
+        kategoriUnit: newUnitCategory.toUpperCase()
+      };
+
+      setPhysicalArchives([newItem, ...physicalArchives]);
+
+      // Reset form
+      setNewClassification('');
+      setNewTitle('');
+      setNewStartDate('');
+      setNewEndDate('');
+      setSelectedPreset('');
+      setNewMediaNumber(prev => prev ? parseInt(prev, 10) + 1 : '');
+    }
+  };
+
+  const handleDeletePhysicalArchive = (id) => {
+    if (confirm('Apakah Anda yakin ingin menghapus data arsip fisik ini?')) {
+      setPhysicalArchives(physicalArchives.filter(item => item.id !== id));
+      if (editingItem && editingItem.id === id) {
+        handleCancelEdit();
+      }
+    }
+  };
+
+  // --- HANDLER RESET & EXPORT DATABASE ---
+  const handleResetDatabase = () => {
+    if (confirm('Apakah Anda yakin ingin mereset database ke data awal? Semua data baru yang Anda tambahkan atau edit akan digantikan oleh 19 data default.')) {
+      setPhysicalArchives(INITIAL_PHYSICAL_ARCHIVES);
+      handleCancelEdit();
+      alert('Database berhasil di-reset ke data default.');
+    }
+  };
+
+  const handleExcelExport = () => {
+    if (physicalArchives.length === 0) {
+      alert('Tidak ada data untuk diekspor.');
+      return;
+    }
+
+    try {
+      // Petakan data arsip ke kolom berlabel Bahasa Indonesia (tanpa Jenis Arsip)
+      const exportData = physicalArchives.map((item, idx) => {
+        const branch = BANDUNG_BRANCHES.find(b => b.code === item.kategoriUnit);
+        const branchName = branch ? `${branch.name} (${branch.code})` : item.kategoriUnit;
+
+        return {
+          'No': idx + 1,
+          'Kode Klasifikasi': item.classificationCode,
+          'Masalah / Judul Arsip': item.title,
+          'Tanggal Awal': item.startDate ? formatDateExcel(item.startDate) : '-',
+          'Tanggal Akhir': item.endDate ? formatDateExcel(item.endDate) : '-',
+          'JRA (Tahun)': item.jra,
+          'Tahun Musnah': item.destructionYear,
+          'No. Media Simpan': item.mediaNumber,
+          'No. Kotak': item.boxNumber,
+          'Cabang': branchName
+        };
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Database Arsip Fisik");
+
+      XLSX.writeFile(workbook, "database_arsip_fisik.xlsx");
+    } catch (err) {
+      console.error(err);
+      alert('Terjadi kesalahan saat mengekspor database ke Excel.');
+    }
+  };
+
+  // --- HELPER UNTUK MENDAPATKAN STATISTIK KOTAK DUS ARSIP ---
+  const getBoxesSummary = () => {
+    const boxesMap = {};
+    physicalArchives.forEach(item => {
+      if (!boxesMap[item.boxNumber]) {
+        boxesMap[item.boxNumber] = {
+          boxNumber: item.boxNumber,
+          items: [],
+          destructionYear: 0,
+          classifications: new Set(),
+          unitKerja: item.unitKerja,
+          kategoriUnit: item.kategoriUnit
+        };
+      }
+      boxesMap[item.boxNumber].items.push(item);
+      boxesMap[item.boxNumber].classifications.add(item.classificationCode);
+      if (item.destructionYear > boxesMap[item.boxNumber].destructionYear) {
+        boxesMap[item.boxNumber].destructionYear = item.destructionYear;
+      }
+    });
+
+    return Object.values(boxesMap).sort((a, b) => {
+      const numA = parseInt(a.boxNumber, 10);
+      const numB = parseInt(b.boxNumber, 10);
+      if (!isNaN(numA) && !isNaN(numB)) {
+        return numA - numB;
+      }
+      return a.boxNumber.localeCompare(b.boxNumber);
+    });
+  };
+
+  // --- DATE FORMATTER INDONESIA UNTUK PRINT DIK ---
+  const formatDateIndo = (dateStr) => {
+    if (!dateStr) return '';
+    const months = [
+      'JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI',
+      'JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER'
+    ];
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return dateStr;
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = months[date.getMonth()];
+    const year = date.getFullYear();
+    return `${day} ${month} ${year}`;
+  };
+
+  // --- DATE FORMATTER EXCEL UNTUK TABEL DATABASE ---
+  const formatDateExcel = (dateStr) => {
+    if (!dateStr) return '-';
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return dateStr;
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
+
+  // Filter tabel fisik
+  const filteredPhysicalArchives = physicalArchives.filter(item => {
+    const matchBox = filterBoxNumber ? item.boxNumber === filterBoxNumber : true;
+    const matchQuery = searchPhysicalQuery ? (
+      item.title.toLowerCase().includes(searchPhysicalQuery.toLowerCase()) ||
+      item.classificationCode.toLowerCase().includes(searchPhysicalQuery.toLowerCase()) ||
+      item.boxNumber.toLowerCase().includes(searchPhysicalQuery.toLowerCase())
+    ) : true;
+    return matchBox && matchQuery;
+  });
+
+  // Ambil list item untuk kotak yang terpilih untuk diprint
+  const itemsToPrint = physicalArchives.filter(item => item.boxNumber === printBoxNumber);
+
+  // Pad tabel print agar pas 9 baris agar visualnya kokoh dan seragam seperti aslinya
+  const paddedPrintRows = [...itemsToPrint];
+  const maxPrintRowsCount = 9;
+  while (paddedPrintRows.length < maxPrintRowsCount) {
+    paddedPrintRows.push({
+      id: `empty-${paddedPrintRows.length}`,
+      classificationCode: '',
+      mediaNumber: '',
+      title: '',
+      startDate: '',
+      endDate: '',
+      jenisArsip: '',
+      destructionYear: ''
+    });
+  }
+
+  // Cari tahun musnah tertinggi untuk kotak yang diprint
+  const printBoxDestructionYear = itemsToPrint.length > 0
+    ? Math.max(...itemsToPrint.map(i => i.destructionYear))
+    : 2025;
+
+  const firstPrintItem = itemsToPrint[0];
+
   // --- COMPONENT: LOGIN PAGE ---
   if (!isLoggedIn) {
     return (
-      <div className="min-h-screen bg-slate-100 dark:bg-slate-900 flex items-center justify-center p-6 font-sans transition-colors duration-300 relative">
+      <div className="min-h-screen bg-slate-100 dark:bg-slate-900 flex items-center justify-center p-4 sm:p-6 font-sans transition-colors duration-300 relative">
         {/* Toggle Mode Gelap */}
-        <button 
+        <button
           type="button"
           onClick={() => setDarkMode(!darkMode)}
-          className="absolute top-6 right-6 p-3 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-2xl shadow-md border border-slate-200 dark:border-slate-700 hover:scale-105 active:scale-95 transition-all duration-300"
+          className="absolute top-4 right-4 sm:top-6 sm:right-6 p-3 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-2xl shadow-md border border-slate-200 dark:border-slate-700 hover:scale-105 active:scale-95 transition-all duration-300"
           title="Ubah Tema"
         >
           {darkMode ? <Sun size={18} className="text-amber-500" /> : <Moon size={18} className="text-indigo-600" />}
         </button>
 
-        <div className="bg-white dark:bg-slate-800 w-full max-w-md rounded-3xl shadow-2xl p-10 animate-in fade-in zoom-in-95 duration-500 border border-slate-100 dark:border-slate-700 transition-colors duration-300">
+        <div className="bg-white dark:bg-slate-800 w-full max-w-md rounded-3xl shadow-2xl p-6 sm:p-10 animate-in fade-in zoom-in-95 duration-500 border border-slate-100 dark:border-slate-700 transition-colors duration-300">
           <div className="text-center mb-8">
             <div className="w-20 h-20 bg-white dark:bg-slate-700 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-md p-2 border border-slate-100 dark:border-slate-600 transition-colors duration-300">
-              <img 
+              <img
                 src="logo_panin.png"
-                alt="Panin Bank" 
+                alt="Panin Bank"
                 className="max-w-full max-h-full object-contain"
               />
             </div>
@@ -146,20 +746,20 @@ const App = () => {
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="relative">
               <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-500" size={18} />
-              <input 
-                type="text" 
-                placeholder="ID Karyawan" 
-                className="w-full bg-slate-50 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-700 rounded-xl py-4 pl-12 pr-4 text-sm focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 outline-none transition-all font-medium text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500" 
+              <input
+                type="text"
+                placeholder="ID Karyawan"
+                className="w-full bg-slate-50 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-700 rounded-xl py-4 pl-12 pr-4 text-sm focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 outline-none transition-all font-medium text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
                 value={employeeId}
                 onChange={e => setEmployeeId(e.target.value)}
               />
             </div>
             <div className="relative">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-500" size={18} />
-              <input 
-                type={showPassword ? "text" : "password"} 
-                placeholder="Kata Sandi" 
-                className="w-full bg-slate-50 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-700 rounded-xl py-4 pl-12 pr-12 text-sm focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 outline-none transition-all font-medium text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500" 
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder="Kata Sandi"
+                className="w-full bg-slate-50 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-700 rounded-xl py-4 pl-12 pr-12 text-sm focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 outline-none transition-all font-medium text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
               />
@@ -173,9 +773,9 @@ const App = () => {
             </button>
           </form>
           <div className="mt-8 pt-6 border-t border-slate-50 dark:border-slate-700/50 text-center">
-             <p className="text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest leading-loose">
-               Sistem Terenkripsi & Dipantau <br /> Bank Panin Cybersecurity Division
-             </p>
+            <p className="text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest leading-loose">
+              Sistem Terenkripsi & Dipantau <br /> Bank Panin Cybersecurity Division
+            </p>
           </div>
         </div>
       </div>
@@ -185,10 +785,13 @@ const App = () => {
   // --- COMPONENT: MAIN APP ---
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex font-sans transition-colors duration-300">
-      {/* Sidebar */}
+
+      {/* Sidebar Desktop */}
       <aside className="w-64 bg-indigo-950 dark:bg-slate-950 text-white p-6 hidden md:flex flex-col fixed h-full z-50 transition-colors duration-300">
         <div className="flex items-center gap-3 mb-10 px-2">
-          <div className="w-8 h-8 rounded flex items-center justify-center font-bold italic"><img src="logo_panin.png" alt="Panin Bank" className="max-w-full max-h-full object-contain"/></div>
+          <div className="w-8 h-8 rounded flex items-center justify-center font-bold italic">
+            <img src="logo_panin.png" alt="Panin Bank" className="max-w-full max-h-full object-contain" />
+          </div>
           <span className="font-bold text-lg tracking-tight">Panin <span className="text-blue-400 font-black italic">AKSES</span></span>
         </div>
         <nav className="space-y-1 flex-1">
@@ -198,9 +801,9 @@ const App = () => {
             { id: 'archive', icon: Database, label: 'Arsip' },
             { id: 'crm', icon: MessageSquare, label: 'Layanan Nasabah' },
           ].map(item => (
-            <button 
-              key={item.id} 
-              onClick={() => setActiveTab(item.id)} 
+            <button
+              key={item.id}
+              onClick={() => handleTabChange(item.id)}
               className={`flex items-center gap-3 w-full p-4 rounded-2xl text-xs font-bold transition-all ${activeTab === item.id ? 'bg-indigo-800 dark:bg-indigo-600 text-white shadow-lg dark:shadow-none' : 'text-indigo-300 dark:text-slate-400 hover:bg-indigo-900/50 dark:hover:bg-slate-900/50 hover:text-white'}`}
             >
               <item.icon size={18} /> {item.label.toUpperCase()}
@@ -208,36 +811,116 @@ const App = () => {
           ))}
         </nav>
         <div className="mt-auto pt-6 border-t border-indigo-900 dark:border-slate-800 px-2">
-          <button onClick={() => setIsLoggedIn(false)} className="text-[10px] font-black text-red-500 uppercase tracking-widest hover:text-white transition">Log out</button>
+          <button
+            onClick={() => { setIsLoggedIn(false); setIsMobileMenuOpen(false); }}
+            className="text-[10px] font-black text-red-500 uppercase tracking-widest hover:text-white transition"
+          >
+            Log out
+          </button>
         </div>
       </aside>
 
+      {/* Sidebar Mobile (Drawer Overlay) */}
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 z-50 md:hidden flex">
+          {/* Overlay Background */}
+          <div
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity duration-300"
+            onClick={() => setIsMobileMenuOpen(false)}
+          ></div>
+
+          {/* Drawer Content */}
+          <aside className="relative w-64 bg-indigo-950 dark:bg-slate-950 text-white p-6 flex flex-col h-full shadow-2xl animate-in slide-in-from-left duration-300 transition-colors duration-300">
+            <button
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="absolute top-6 right-6 p-2 text-indigo-300 hover:text-white bg-indigo-900/50 dark:bg-slate-800 rounded-xl"
+            >
+              <X size={20} />
+            </button>
+            <div className="flex items-center gap-3 mb-10 px-2">
+              <div className="w-8 h-8 rounded flex items-center justify-center font-bold italic">
+                <img src="logo_panin.png" alt="Panin Bank" className="max-w-full max-h-full object-contain" />
+              </div>
+              <span className="font-bold text-lg tracking-tight">Panin <span className="text-blue-400 font-black italic">AKSES</span></span>
+            </div>
+            <nav className="space-y-1 flex-1">
+              {[
+                { id: 'dashboard', icon: Layout, label: 'Dashboard' },
+                { id: 'ecm', icon: FileText, label: 'Smart ECM' },
+                { id: 'archive', icon: Database, label: 'Arsip' },
+                { id: 'crm', icon: MessageSquare, label: 'Layanan Nasabah' },
+              ].map(item => (
+                <button
+                  key={item.id}
+                  onClick={() => handleTabChange(item.id)}
+                  className={`flex items-center gap-3 w-full p-4 rounded-2xl text-xs font-bold transition-all ${activeTab === item.id ? 'bg-indigo-800 dark:bg-indigo-600 text-white shadow-lg dark:shadow-none' : 'text-indigo-300 dark:text-slate-400 hover:bg-indigo-900/50 dark:hover:bg-slate-900/50 hover:text-white'}`}
+                >
+                  <item.icon size={18} /> {item.label.toUpperCase()}
+                </button>
+              ))}
+            </nav>
+            <div className="mt-auto pt-6 border-t border-indigo-900 dark:border-slate-800 px-2">
+              <button
+                onClick={() => { setIsLoggedIn(false); setIsMobileMenuOpen(false); }}
+                className="text-[10px] font-black text-red-500 uppercase tracking-widest hover:text-white transition"
+              >
+                Log out
+              </button>
+            </div>
+          </aside>
+        </div>
+      )}
+
       {/* Main Content */}
-      <main className="flex-1 md:ml-64 p-8 min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-300">
+      <main className="flex-1 md:ml-64 p-4 sm:p-6 md:p-8 min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-300 w-full">
+
         {/* Header */}
-        <header className="flex justify-between items-center mb-8 bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm dark:shadow-none border border-slate-100 dark:border-slate-700 transition-colors duration-300">
-          <div>
-            <h1 className="text-xl font-black text-indigo-950 dark:text-white uppercase tracking-tight">
-              {activeTab === 'dashboard' && "Kinerja Layanan Terintegrasi AI"}
-              {activeTab === 'ecm' && "Enterprise Content Management"}
-              {activeTab === 'archive' && "AI Archive Search"}
-              {activeTab === 'crm' && "Service Interaction"}
-            </h1>
-            <p className="text-slate-400 dark:text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1">
-              User: Maulana Yusup Wijaya • ID: {employeeId}
-            </p>
+        <header className={`flex justify-between items-center sticky top-2 sm:top-4 z-40 transition-all duration-300 ${
+          isHeaderScrolled
+            ? 'py-2.5 px-4 sm:px-6 mb-4 bg-white/95 dark:bg-slate-800/95 backdrop-blur-md shadow-md rounded-2xl border border-slate-200 dark:border-slate-700'
+            : 'py-4 sm:py-6 px-4 sm:px-6 mb-6 sm:mb-8 bg-white dark:bg-slate-800 rounded-3xl shadow-sm dark:shadow-none border border-slate-100 dark:border-slate-700'
+        }`}>
+          <div className="flex items-center gap-3">
+            {/* Hamburger Button for Mobile */}
+            <button
+              onClick={() => setIsMobileMenuOpen(true)}
+              className={`bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl shadow-inner md:hidden hover:scale-105 active:scale-95 transition-all duration-300 ${isHeaderScrolled ? 'p-2' : 'p-3'}`}
+            >
+              <Menu size={isHeaderScrolled ? 14 : 18} className="transition-all duration-300" />
+            </button>
+            <div>
+              <h1 className={`font-black text-indigo-950 dark:text-white uppercase tracking-tight transition-all duration-300 ${
+                isHeaderScrolled ? 'text-[10px] sm:text-[13px] md:text-base' : 'text-xs sm:text-base md:text-xl'
+              }`}>
+                {activeTab === 'dashboard' && "Kinerja Layanan Terintegrasi AI"}
+                {activeTab === 'ecm' && "Enterprise Content Management"}
+                {activeTab === 'archive' && "Pusat Kearsipan"}
+                {activeTab === 'crm' && "Service Interaction"}
+              </h1>
+              <p className={`text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest transition-all duration-300 ${
+                isHeaderScrolled ? 'text-[6px] sm:text-[8px] mt-0.5' : 'text-[8px] sm:text-[10px] mt-1'
+              }`}>
+                User: Maulana Yusup Wijaya • ID: {employeeId}
+              </p>
+            </div>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             {/* Toggle Mode Gelap */}
-            <button 
+            <button
               onClick={() => setDarkMode(!darkMode)}
-              className="p-3 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-2xl shadow-inner hover:scale-105 active:scale-95 transition-all duration-300"
+              className={`bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl shadow-inner hover:scale-105 active:scale-95 transition-all duration-300 ${isHeaderScrolled ? 'p-2' : 'p-3'}`}
               title="Ubah Tema"
             >
-              {darkMode ? <Sun size={18} className="text-amber-500" /> : <Moon size={18} className="text-indigo-600" />}
+              {darkMode ? (
+                <Sun size={isHeaderScrolled ? 14 : 18} className="text-amber-500 transition-all duration-300" />
+              ) : (
+                <Moon size={isHeaderScrolled ? 14 : 18} className="text-indigo-600 transition-all duration-300" />
+              )}
             </button>
-            <div className="w-10 h-10 bg-indigo-100 dark:bg-slate-700 rounded-2xl flex items-center justify-center text-indigo-700 dark:text-indigo-400 font-black shadow-inner">
-              <User size={20} />
+            <div className={`bg-indigo-100 dark:bg-slate-700 rounded-xl flex items-center justify-center text-indigo-700 dark:text-indigo-400 font-black shadow-inner transition-all duration-300 ${
+              isHeaderScrolled ? 'w-8 h-8' : 'w-10 h-10'
+            }`}>
+              <User size={isHeaderScrolled ? 16 : 20} className="transition-all duration-300" />
             </div>
           </div>
         </header>
@@ -250,49 +933,64 @@ const App = () => {
                 { label: 'Speed Improvement', val: '45%', icon: Clock, color: 'green', desc: 'Penurunan waktu siklus' },
                 { label: 'AI Prediction Accuracy', val: '94.2%', icon: Sparkles, color: 'indigo', desc: 'Akurasi draf jawaban' },
                 { label: 'Customer Satisfaction', val: '8.9/10', icon: CheckCircle2, color: 'orange', desc: 'Skor interaksi CRM' },
-              ].map(card => (
-                <div key={card.label} className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm dark:shadow-none border border-slate-100 dark:border-slate-700 flex flex-col items-center text-center transition-all duration-300">
-                  <div className={`w-12 h-12 bg-${card.color}-50 dark:bg-${card.color}-950/30 text-${card.color}-600 dark:text-${card.color}-400 rounded-2xl flex items-center justify-center mb-4 shadow-sm`}> <card.icon size={24} /> </div>
-                  <h3 className="text-3xl font-black text-slate-800 dark:text-white">{card.val}</h3>
-                  <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-1">{card.label}</p>
-                  <p className="text-[9px] text-slate-400 dark:text-slate-500 mt-2 italic">"{card.desc}"</p>
-                </div>
-              ))}
+              ].map(card => {
+                const colorClasses = {
+                  green: 'bg-green-50 dark:bg-green-950/30 text-green-600 dark:text-green-400',
+                  indigo: 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400',
+                  orange: 'bg-orange-50 dark:bg-orange-950/30 text-orange-600 dark:text-orange-400',
+                };
+                return (
+                  <div key={card.label} className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm dark:shadow-none border border-slate-100 dark:border-slate-700 flex flex-col items-center text-center transition-all duration-300">
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 shadow-sm ${colorClasses[card.color] || ''}`}>
+                      <card.icon size={24} />
+                    </div>
+                    <h3 className="text-3xl font-black text-slate-800 dark:text-white">{card.val}</h3>
+                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-1">{card.label}</p>
+                    <p className="text-[9px] text-slate-400 dark:text-slate-500 mt-2 italic">"{card.desc}"</p>
+                  </div>
+                );
+              })}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-               <div className="bg-white dark:bg-slate-800 p-8 rounded-3xl shadow-sm dark:shadow-none border border-slate-100 dark:border-slate-700 transition-all duration-300">
-                  <h3 className="font-black text-xs uppercase text-slate-400 dark:text-slate-500 tracking-widest mb-6 flex items-center gap-2">
-                    <BarChart3 size={18} className="text-indigo-600 dark:text-indigo-400"/> Efisiensi Layanan
-                  </h3>
-                  <div className="space-y-6">
-                    <div>
-                      <div className="flex justify-between text-[10px] font-bold mb-2 uppercase text-slate-600 dark:text-slate-400"> <span>Pencarian Dokumen</span> <span className="text-green-600 dark:text-green-400">80% Lebih Cepat</span> </div>
-                      <div className="h-3 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden flex">
-                        <div className="bg-slate-200 dark:bg-slate-600 w-full"></div>
-                        <div className="bg-indigo-600 dark:bg-indigo-500 w-1/5 -ml-[100%] transition-all duration-1000"></div>
-                      </div>
+              <div className="bg-white dark:bg-slate-800 p-6 sm:p-8 rounded-3xl shadow-sm dark:shadow-none border border-slate-100 dark:border-slate-700 transition-all duration-300">
+                <h3 className="font-black text-xs uppercase text-slate-400 dark:text-slate-500 tracking-widest mb-6 flex items-center gap-2">
+                  <BarChart3 size={18} className="text-indigo-600 dark:text-indigo-400" /> Efisiensi Layanan
+                </h3>
+                <div className="space-y-6">
+                  <div>
+                    <div className="flex justify-between text-[10px] font-bold mb-2 uppercase text-slate-600 dark:text-slate-400">
+                      <span>Pencarian Dokumen</span>
+                      <span className="text-green-600 dark:text-green-400">80% Lebih Cepat</span>
                     </div>
-                    <div>
-                      <div className="flex justify-between text-[10px] font-bold mb-2 uppercase text-slate-600 dark:text-slate-400"> <span>Penyusunan Respon CRM</span> <span className="text-green-600 dark:text-green-400">65% Lebih Cepat</span> </div>
-                      <div className="h-3 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden flex">
-                        <div className="bg-slate-200 dark:bg-slate-600 w-full"></div>
-                        <div className="bg-orange-500 dark:bg-orange-400 w-[35%] -ml-[100%] transition-all duration-1000"></div>
-                      </div>
+                    <div className="h-3 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden flex">
+                      <div className="bg-slate-200 dark:bg-slate-600 w-full"></div>
+                      <div className="bg-indigo-600 dark:bg-indigo-500 w-1/5 -ml-[100%] transition-all duration-1000"></div>
                     </div>
                   </div>
-               </div>
-               <div className="bg-indigo-900 dark:bg-indigo-950/40 text-white p-8 rounded-3xl shadow-xl dark:shadow-none border border-transparent dark:border-slate-800 flex flex-col justify-center transition-all duration-300">
-                  <h3 className="text-orange-400 font-black text-xs uppercase tracking-widest mb-2 italic">Research Highlight</h3>
-                  <p className="text-sm leading-relaxed">
-                    "Integrasi Generative AI pada sistem ECM Bank Panin terbukti mempercepat akses informasi krusial, yang secara langsung meningkatkan kualitas dan kecepatan interaksi pada sistem CRM."
-                  </p>
-                  <div className="mt-6 flex gap-3">
-                    <span className="text-[9px] font-bold px-3 py-1 bg-white/10 dark:bg-white/5 rounded-full">#FinTech</span>
-                    <span className="text-[9px] font-bold px-3 py-1 bg-white/10 dark:bg-white/5 rounded-full">#GenAI</span>
-                    <span className="text-[9px] font-bold px-3 py-1 bg-white/10 dark:bg-white/5 rounded-full">#ECM</span>
+                  <div>
+                    <div className="flex justify-between text-[10px] font-bold mb-2 uppercase text-slate-600 dark:text-slate-400">
+                      <span>Penyusunan Respon CRM</span>
+                      <span className="text-green-600 dark:text-green-400">65% Lebih Cepat</span>
+                    </div>
+                    <div className="h-3 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden flex">
+                      <div className="bg-slate-200 dark:bg-slate-600 w-full"></div>
+                      <div className="bg-orange-500 dark:bg-orange-400 w-[35%] -ml-[100%] transition-all duration-1000"></div>
+                    </div>
                   </div>
-               </div>
+                </div>
+              </div>
+              <div className="bg-indigo-900 dark:bg-indigo-950/40 text-white p-6 sm:p-8 rounded-3xl shadow-xl dark:shadow-none border border-transparent dark:border-slate-800 flex flex-col justify-center transition-all duration-300">
+                <h3 className="text-orange-400 font-black text-xs uppercase tracking-widest mb-2 italic">Research Highlight</h3>
+                <p className="text-sm leading-relaxed">
+                  "Integrasi Generative AI pada sistem ECM Bank Panin terbukti mempercepat akses informasi krusial, yang secara langsung meningkatkan kualitas dan kecepatan interaksi pada sistem CRM."
+                </p>
+                <div className="mt-6 flex flex-wrap gap-2">
+                  <span className="text-[9px] font-bold px-3 py-1 bg-white/10 dark:bg-white/5 rounded-full">#FinTech</span>
+                  <span className="text-[9px] font-bold px-3 py-1 bg-white/10 dark:bg-white/5 rounded-full">#GenAI</span>
+                  <span className="text-[9px] font-bold px-3 py-1 bg-white/10 dark:bg-white/5 rounded-full">#ECM</span>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -301,16 +999,20 @@ const App = () => {
         {activeTab === 'ecm' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
             <div className="lg:col-span-2 space-y-6">
-              <div className="bg-white dark:bg-slate-800 p-4 rounded-3xl shadow-sm dark:shadow-none border border-slate-100 dark:border-slate-700 flex items-center gap-3 transition-all duration-300">
-                <Search size={20} className="text-slate-300 dark:text-slate-500 ml-2" />
-                <input 
-                  type="text" 
-                  placeholder="contoh: 'Cari kebijakan bunga KPR terbaru'" 
-                  className="flex-1 bg-transparent py-3 text-sm outline-none font-medium text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500" 
-                  value={ecmSearch} 
-                  onChange={e => setEcmSearch(e.target.value)} 
-                />
-                <button className="bg-indigo-900 dark:bg-indigo-600 text-white px-8 py-3 rounded-2xl text-xs font-black tracking-widest hover:bg-black dark:hover:bg-indigo-700 transition shadow-lg dark:shadow-none">SEARCH</button>
+              <div className="bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-3xl shadow-sm dark:shadow-none border border-slate-100 dark:border-slate-700 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 transition-all duration-300">
+                <div className="flex items-center gap-2 flex-1">
+                  <Search size={20} className="text-slate-300 dark:text-slate-500 ml-2" />
+                  <input
+                    type="text"
+                    placeholder="contoh: 'Cari kebijakan bunga KPR terbaru'"
+                    className="w-full bg-transparent py-3 text-sm outline-none font-medium text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
+                    value={ecmSearch}
+                    onChange={e => setEcmSearch(e.target.value)}
+                  />
+                </div>
+                <button className="bg-indigo-900 dark:bg-indigo-600 text-white px-8 py-3 rounded-2xl text-xs font-black tracking-widest hover:bg-black dark:hover:bg-indigo-700 transition shadow-lg dark:shadow-none text-center">
+                  SEARCH
+                </button>
               </div>
               <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm dark:shadow-none border border-slate-100 dark:border-slate-700 overflow-hidden transition-all duration-300">
                 <div className="p-6 border-b border-slate-50 dark:border-slate-700/50 flex justify-between items-center">
@@ -319,32 +1021,34 @@ const App = () => {
                 </div>
                 <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
                   {ECM_DOCUMENTS.map(doc => (
-                    <div 
-                      key={doc.id} 
-                      onClick={() => handleEcmSummarize(doc)} 
+                    <div
+                      key={doc.id}
+                      onClick={() => handleEcmSummarize(doc)}
                       className={`p-5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/30 cursor-pointer transition group ${selectedDoc?.id === doc.id ? 'bg-indigo-50/50 dark:bg-indigo-950/20' : ''}`}
                     >
-                      <div className="flex items-center gap-4">
-                        <div className="p-3 bg-slate-100 dark:bg-slate-700 rounded-2xl text-indigo-600 dark:text-indigo-400 group-hover:bg-white dark:group-hover:bg-slate-600 border border-transparent group-hover:border-indigo-100 dark:group-hover:border-slate-700 transition"><FileText size={20} /></div>
-                        <div> 
-                          <p className="font-bold text-sm text-slate-800 dark:text-slate-200">{doc.title}</p> 
-                          <p className="text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase mt-1 tracking-tighter">{doc.type} • {doc.size} • {doc.date}</p> 
+                      <div className="flex items-center gap-4 min-w-0 flex-1 mr-2">
+                        <div className="p-3 bg-slate-100 dark:bg-slate-700 rounded-2xl text-indigo-600 dark:text-indigo-400 group-hover:bg-white dark:group-hover:bg-slate-600 border border-transparent group-hover:border-indigo-100 dark:group-hover:border-slate-700 transition shrink-0">
+                          <FileText size={20} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-sm text-slate-800 dark:text-slate-200 truncate sm:whitespace-normal">{doc.title}</p>
+                          <p className="text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase mt-1 tracking-tighter truncate">{doc.type} • {doc.size} • {doc.date}</p>
                         </div>
                       </div>
-                      <ChevronRight size={18} className={`transition ${selectedDoc?.id === doc.id ? 'text-indigo-600 dark:text-indigo-400 translate-x-1' : 'text-slate-200 dark:text-slate-700'}`} />
+                      <ChevronRight size={18} className={`transition shrink-0 ${selectedDoc?.id === doc.id ? 'text-indigo-600 dark:text-indigo-400 translate-x-1' : 'text-slate-200 dark:text-slate-700'}`} />
                     </div>
                   ))}
                 </div>
               </div>
             </div>
-            
+
             {/* AI Summary Sidebar */}
             <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm dark:shadow-none border border-slate-100 dark:border-slate-700 overflow-hidden flex flex-col transition-all duration-300">
               <div className="p-6 bg-indigo-950 dark:bg-slate-900 text-white flex items-center gap-3 transition-colors duration-300">
                 <Sparkles size={20} className="text-orange-400" />
                 <h3 className="font-black text-xs uppercase tracking-widest">AI Smart Summary</h3>
               </div>
-              <div className="p-8 flex-1">
+              <div className="p-6 sm:p-8 flex-1">
                 {!selectedDoc ? (
                   <div className="text-center py-20 text-slate-300 dark:text-slate-500">
                     <Info size={48} className="mx-auto mb-4 opacity-10" />
@@ -376,86 +1080,565 @@ const App = () => {
           </div>
         )}
 
-        {/* Tab Content: Arsip */}
+        {/* Tab Content: Arsip (Modul Kearsipan Terintegrasi) */}
         {activeTab === 'archive' && (
           <div className="space-y-6 animate-in fade-in duration-500">
-            <div className="bg-indigo-900 dark:bg-slate-800 text-white p-10 rounded-3xl shadow-xl dark:shadow-none border border-transparent dark:border-slate-700 relative overflow-hidden transition-all duration-300">
-               <div className="absolute right-[-20px] top-[-20px] opacity-10"><Database size={200} /></div>
-               <div className="relative z-10">
-                  <h2 className="text-2xl font-black mb-6 flex items-center gap-3 uppercase tracking-tight">
-                    <Sparkles size={28} className="text-white-400" /> Cari Arsip
-                  </h2>
-                  <div className="flex gap-3 bg-white/10 p-3 rounded-2xl backdrop-blur-md border border-white/20">
-                    <input 
-                      type="text" 
-                      placeholder="Masukkan Nama Nasabah atau Nomor CIF" 
-                      className="flex-1 bg-transparent px-4 py-2 text-white placeholder:text-indigo-200 dark:placeholder:text-slate-400 outline-none text-lg font-medium"
-                      value={archiveSearch}
-                      onChange={e => setArchiveSearch(e.target.value)}
-                    />
-                    <button 
-                      onClick={handleArchiveSearch}
-                      disabled={isArchiveSearching}
-                      className="bg-orange-500 hover:bg-orange-600 text-white px-10 py-3 rounded-xl font-black uppercase tracking-widest transition flex items-center gap-2 shadow-lg shadow-orange-950/20"
-                    >
-                      {isArchiveSearching ? <Loader2 className="animate-spin" /> : "Cari"}
-                    </button>
-                  </div>
-                  <p className="mt-4 text-[10px] font-bold text-indigo-300 dark:text-slate-400 uppercase tracking-widest">
-                    AI Scan Engine: Mengakses Database ECM Bank Panin
-                  </p>
-               </div>
+            {/* Sub-Tab Navigation Header */}
+            <div className="flex gap-6 border-b border-slate-200 dark:border-slate-700 pb-4">
+              <button
+                onClick={() => setArchiveSubTab('nasabah')}
+                className={`pb-2 text-xs font-black uppercase tracking-widest transition-all ${archiveSubTab === 'nasabah' ? 'border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400 font-extrabold' : 'text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+              >
+                Pencarian Dokumen Nasabah
+              </button>
+              <button
+                onClick={() => setArchiveSubTab('fisik')}
+                className={`pb-2 text-xs font-black uppercase tracking-widest transition-all ${archiveSubTab === 'fisik' ? 'border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400 font-extrabold' : 'text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+              >
+                Dus Fisik & Label DIK
+              </button>
             </div>
 
-            {archiveInsight && (
-              <div className="bg-white dark:bg-slate-800 p-8 rounded-3xl shadow-md dark:shadow-none border-l-8 border-l-orange-500 dark:border-slate-700 animate-in slide-in-from-left-4 duration-500 flex gap-6 items-start transition-colors duration-300">
-                 <div className="p-3 bg-orange-100 dark:bg-orange-950/40 text-red-600 dark:text-orange-400 rounded-2xl shadow-sm"><Sparkles size={24}/></div>
-                 <div>
-                    <h3 className="text-red-600 dark:text-orange-500 font-black text-xs uppercase tracking-widest mb-2">Generative AI Insight</h3>
-                    <p className="text-base font-medium text-slate-700 dark:text-slate-300 leading-relaxed italic">"{archiveInsight}"</p>
-                 </div>
+            {/* Sub-Tab 1: Pencarian Dokumen Nasabah */}
+            {archiveSubTab === 'nasabah' && (
+              <div className="space-y-6 animate-in fade-in duration-300">
+                <div className="bg-indigo-900 dark:bg-slate-800 text-white p-6 sm:p-10 rounded-3xl shadow-xl dark:shadow-none border border-transparent dark:border-slate-700 relative overflow-hidden transition-all duration-300">
+                  <div className="absolute right-[-20px] top-[-20px] opacity-10"><Database size={200} /></div>
+                  <div className="relative z-10">
+                    <h2 className="text-xl sm:text-2xl font-black mb-6 flex items-center gap-3 uppercase tracking-tight">
+                      <Sparkles size={28} className="text-white-400" /> Cari Arsip Nasabah
+                    </h2>
+                    <div className="flex flex-col sm:flex-row gap-3 bg-white/10 p-3 rounded-2xl backdrop-blur-md border border-white/20">
+                      <input
+                        type="text"
+                        placeholder="Masukkan Nama Nasabah atau Nomor CIF"
+                        className="flex-1 bg-transparent px-4 py-2 text-white placeholder:text-indigo-200 dark:placeholder:text-slate-400 outline-none text-base sm:text-lg font-medium"
+                        value={archiveSearch}
+                        onChange={e => setArchiveSearch(e.target.value)}
+                      />
+                      <button
+                        onClick={handleArchiveSearch}
+                        disabled={isArchiveSearching}
+                        className="bg-orange-500 hover:bg-orange-600 text-white px-10 py-3 rounded-xl font-black uppercase tracking-widest transition flex items-center justify-center gap-2 shadow-lg shadow-orange-950/20"
+                      >
+                        {isArchiveSearching ? <Loader2 className="animate-spin" /> : "Cari"}
+                      </button>
+                    </div>
+                    <p className="mt-4 text-[10px] font-bold text-indigo-300 dark:text-slate-400 uppercase tracking-widest">
+                      AI Scan Engine: Mengakses Database ECM Bank Panin
+                    </p>
+                  </div>
+                </div>
+
+                {archiveInsight && (
+                  <div className="bg-white dark:bg-slate-800 p-6 sm:p-8 rounded-3xl shadow-md dark:shadow-none border-l-8 border-l-orange-500 dark:border-slate-700 animate-in slide-in-from-left-4 duration-500 flex flex-col sm:flex-row gap-4 sm:gap-6 items-start transition-colors duration-300">
+                    <div className="p-3 bg-orange-100 dark:bg-orange-950/40 text-red-600 dark:text-orange-400 rounded-2xl shadow-sm shrink-0"><Sparkles size={24} /></div>
+                    <div>
+                      <h3 className="text-red-600 dark:text-orange-500 font-black text-xs uppercase tracking-widest mb-2">Generative AI Insight</h3>
+                      <p className="text-sm sm:text-base font-medium text-slate-700 dark:text-slate-300 leading-relaxed italic">"{archiveInsight}"</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm dark:shadow-none border border-slate-100 dark:border-slate-700 overflow-hidden min-h-[300px] transition-all duration-300">
+                  <div className="p-6 border-b border-slate-50 dark:border-slate-700/50 flex flex-col sm:flex-row gap-2 justify-between items-start sm:items-center bg-slate-50/50 dark:bg-slate-900/20">
+                    <h3 className="font-black text-xs uppercase text-slate-400 dark:text-slate-500 tracking-widest">Data Scanned Nasabah</h3>
+                    <span className="text-[10px] font-black bg-indigo-100 dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 px-3 py-1 rounded-full uppercase">Total: {foundArchives.length} Dokumen</span>
+                  </div>
+                  <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
+                    {foundArchives.length > 0 ? foundArchives.map(f => (
+                      <div key={f.id} className="p-6 flex items-center justify-between group hover:bg-slate-50 dark:hover:bg-slate-700/30 transition cursor-pointer">
+                        <div className="flex items-center gap-5 min-w-0 flex-1 mr-4">
+                          <div className="w-12 h-12 bg-white dark:bg-slate-700 border border-slate-100 dark:border-slate-600 rounded-2xl flex items-center justify-center text-slate-300 dark:text-slate-500 group-hover:text-indigo-600 dark:hover:text-indigo-400 group-hover:border-indigo-100 dark:group-hover:border-indigo-900 group-hover:shadow-sm transition shrink-0">
+                            <FileText size={24} />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-black text-slate-800 dark:text-slate-200 truncate">{f.doc}</p>
+                            <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider mt-1 truncate">
+                              Nasabah: <span className="text-slate-600 dark:text-slate-300">{f.name}</span> • Kategori: {f.cat} • CIF: {f.cif}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+                          <button className="p-2 text-slate-300 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition"><Download size={20} /></button>
+                          <ChevronRight size={20} className="text-slate-100 dark:text-slate-700 group-hover:text-indigo-600 dark:group-hover:text-indigo-400" />
+                        </div>
+                      </div>
+                    )) : (
+                      <div className="py-24 text-center">
+                        <div className="w-20 h-20 bg-slate-50 dark:bg-slate-700/30 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-100 dark:border-slate-700">
+                          <Database size={32} className="text-slate-200 dark:text-slate-600" />
+                        </div>
+                        <p className="text-slate-300 dark:text-slate-500 font-black text-xs uppercase tracking-[0.2em] px-4">Silakan masukkan kueri pencarian arsip</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
 
-            <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm dark:shadow-none border border-slate-100 dark:border-slate-700 overflow-hidden min-h-[300px] transition-all duration-300">
-              <div className="p-6 border-b border-slate-50 dark:border-slate-700/50 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/20">
-                <h3 className="font-black text-xs uppercase text-slate-400 dark:text-slate-500 tracking-widest">Data Historis Nasabah</h3>
-                <span className="text-[10px] font-black bg-indigo-100 dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 px-3 py-1 rounded-full uppercase">Total: {foundArchives.length} Dokumen</span>
-              </div>
-              <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
-                {foundArchives.length > 0 ? foundArchives.map(f => (
-                  <div key={f.id} className="p-6 flex items-center justify-between group hover:bg-slate-50 dark:hover:bg-slate-700/30 transition cursor-pointer">
-                    <div className="flex items-center gap-5">
-                      <div className="w-12 h-12 bg-white dark:bg-slate-700 border border-slate-100 dark:border-slate-600 rounded-2xl flex items-center justify-center text-slate-300 dark:text-slate-500 group-hover:text-indigo-600 dark:hover:text-indigo-400 group-hover:border-indigo-100 dark:group-hover:border-indigo-900 group-hover:shadow-sm transition"> <FileText size={24} /> </div>
-                      <div> 
-                        <p className="font-black text-slate-800 dark:text-slate-200">{f.doc}</p> 
-                        <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider mt-1">
-                          Nasabah: <span className="text-slate-600 dark:text-slate-300">{f.name}</span> • Kategori: {f.cat} • CIF: {f.cif}
-                        </p> 
+            {/* Sub-Tab 2: Kearsipan Dus Fisik & Cetak Label DIK */}
+            {archiveSubTab === 'fisik' && (
+              <div className="space-y-6 animate-in fade-in duration-300">
+
+                {/* Ringkasan Kearsipan Fisik */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="bg-white dark:bg-slate-800 p-5 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-sm flex items-center justify-between">
+                    <div>
+                      <h4 className="text-slate-400 dark:text-slate-500 text-[10px] font-bold uppercase tracking-wider">Total Box / Dus</h4>
+                      <h3 className="text-2xl font-black text-slate-800 dark:text-white mt-1">{getBoxesSummary().length} Box</h3>
+                    </div>
+                    <div className="p-3 bg-indigo-50 dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 rounded-2xl"><Database size={20} /></div>
+                  </div>
+                  <div className="bg-white dark:bg-slate-800 p-5 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-sm flex items-center justify-between">
+                    <div>
+                      <h4 className="text-slate-400 dark:text-slate-500 text-[10px] font-bold uppercase tracking-wider">Total Dokumen Arsip</h4>
+                      <h3 className="text-2xl font-black text-slate-800 dark:text-white mt-1">{physicalArchives.length} Item</h3>
+                    </div>
+                    <div className="p-3 bg-green-50 dark:bg-slate-900 text-green-600 dark:text-green-400 rounded-2xl"><FileText size={20} /></div>
+                  </div>
+                  <div className="bg-white dark:bg-slate-800 p-5 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-sm flex items-center justify-between">
+                    <div>
+                      <h4 className="text-slate-400 dark:text-slate-500 text-[10px] font-bold uppercase tracking-wider">Arsip Aktif (Belum Musnah)</h4>
+                      <h3 className="text-2xl font-black text-slate-800 dark:text-white mt-1">
+                        {physicalArchives.filter(a => a.destructionYear >= 2026).length} Item
+                      </h3>
+                    </div>
+                    <div className="p-3 bg-amber-50 dark:bg-slate-900 text-amber-600 dark:text-amber-400 rounded-2xl"><CheckCircle2 size={20} /></div>
+                  </div>
+                  <div className="bg-white dark:bg-slate-800 p-5 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-sm flex items-center justify-between">
+                    <div>
+                      <h4 className="text-slate-400 dark:text-slate-500 text-[10px] font-bold uppercase tracking-wider">Kode Cabang Utama</h4>
+                      <h3 className="text-sm font-black text-slate-800 dark:text-white mt-2">BAN/BSE (Bandung)</h3>
+                    </div>
+                    <div className="p-3 bg-red-50 dark:bg-slate-900 text-red-600 dark:text-red-400 rounded-2xl"><User size={20} /></div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
+
+                  {/* Left Column: Form Input Arsip Fisik Baru */}
+                  <div className="xl:col-span-1 bg-white dark:bg-slate-800 p-6 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-sm transition-all duration-300">
+                    <div className="flex items-center gap-2 mb-6 pb-2 border-b border-slate-100 dark:border-slate-700">
+                      {editingItem ? <Edit2 className="text-amber-500" size={18} /> : <Plus className="text-indigo-600" size={18} />}
+                      <h3 className="font-black text-xs uppercase text-slate-800 dark:text-white tracking-widest">
+                        {editingItem ? `Edit Data Arsip #${editingItem.id}` : 'Input Kearsipan Baru'}
+                      </h3>
+                    </div>
+
+                    <form onSubmit={handleAddPhysicalArchive} className="space-y-4">
+                      <div>
+                        {classMode === 'select' ? (
+                          <div>
+                            <div className="flex justify-between items-center mb-1">
+                              <label className="block text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500">Kode Klasifikasi *</label>
+                              <button
+                                type="button"
+                                onClick={() => { setClassMode('manual'); setSelectedPreset(''); setNewClassification(''); setNewTitle(''); }}
+                                className="text-indigo-600 dark:text-indigo-400 text-[10px] font-bold hover:underline"
+                              >
+                                Ketik Manual
+                              </button>
+                            </div>
+                            <select
+                              className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-100 dark:border-slate-600 rounded-xl py-3 px-3 text-xs font-semibold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-indigo-600"
+                              value={selectedPreset}
+                              onChange={e => {
+                                const val = e.target.value;
+                                setSelectedPreset(val);
+                                const selected = CLASSIFICATION_MASTER.find(c => c.code === val);
+                                if (selected) {
+                                  setNewClassification(selected.codeActual || selected.code);
+                                  setNewTitle(selected.title);
+                                  setNewJra(String(selected.defaultJra));
+                                }
+                              }}
+                            >
+                              <option value="" disabled>-- Pilih Klasifikasi --</option>
+                              {CLASSIFICATION_MASTER.map(c => (
+                                <option key={c.code} value={c.code}>{c.code} - {c.title}</option>
+                              ))}
+                            </select>
+                          </div>
+                        ) : (
+                          <div>
+                            <div className="flex justify-between items-center mb-1">
+                              <label className="block text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500">Kode Klasifikasi *</label>
+                              <button
+                                type="button"
+                                onClick={() => { setClassMode('select'); setNewClassification(''); setNewTitle(''); }}
+                                className="text-indigo-600 dark:text-indigo-400 text-[10px] font-bold hover:underline"
+                              >
+                                Pilih dari List
+                              </button>
+                            </div>
+                            <input
+                              type="text"
+                              placeholder="Contoh: AK 99.01"
+                              required
+                              className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-100 dark:border-slate-600 rounded-xl py-3 px-4 text-xs font-semibold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-indigo-600"
+                              value={newClassification}
+                              onChange={e => setNewClassification(e.target.value)}
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500 mb-1">Masalah / Judul Arsip *</label>
+                        <input
+                          type="text"
+                          placeholder="Contoh: Laporan Neraca"
+                          required
+                          className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-100 dark:border-slate-600 rounded-xl py-3 px-4 text-xs font-semibold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-indigo-600"
+                          value={newTitle}
+                          onChange={e => setNewTitle(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500 mb-1">Tanggal Awal</label>
+                          <input
+                            type="date"
+                            className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-100 dark:border-slate-600 rounded-xl py-3 px-4 text-xs font-semibold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-indigo-600"
+                            value={newStartDate}
+                            onChange={e => setNewStartDate(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500 mb-1">Tanggal Akhir *</label>
+                          <input
+                            type="date"
+                            required
+                            className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-100 dark:border-slate-600 rounded-xl py-3 px-4 text-xs font-semibold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-indigo-600"
+                            value={newEndDate}
+                            onChange={e => setNewEndDate(e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500 mb-1">JRA (Retensi - Tahun)</label>
+                          <input
+                            type="number"
+                            min="1"
+                            className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-100 dark:border-slate-600 rounded-xl py-3 px-4 text-xs font-semibold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-indigo-600"
+                            value={newJra}
+                            onChange={e => setNewJra(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500 mb-1">Tahun Musnah</label>
+                          <input
+                            type="text"
+                            readOnly
+                            disabled
+                            placeholder="Auto-calculated"
+                            className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl py-3 px-4 text-xs font-bold text-indigo-600 dark:text-indigo-400 outline-none cursor-not-allowed"
+                            value={newDestructionYear ? `${newDestructionYear} (Akhir + JRA)` : ''}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500 mb-1">No. Media Simpan *</label>
+                          <input
+                            type="number"
+                            min="1"
+                            placeholder="Contoh: 1"
+                            required
+                            className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-100 dark:border-slate-600 rounded-xl py-3 px-4 text-xs font-semibold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-indigo-600"
+                            value={newMediaNumber}
+                            onChange={e => setNewMediaNumber(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500 mb-1">No. Kotak Arsip *</label>
+                          <input
+                            type="text"
+                            placeholder="Contoh: 1"
+                            required
+                            className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-100 dark:border-slate-600 rounded-xl py-3 px-4 text-xs font-semibold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-indigo-600"
+                            value={newBoxNumber}
+                            onChange={e => setNewBoxNumber(e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500 mb-1">Kode Cabang *</label>
+                        <select
+                          required
+                          className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-100 dark:border-slate-600 rounded-xl py-3 px-3 text-xs font-semibold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-indigo-600"
+                          value={newUnitCategory}
+                          onChange={e => setNewUnitCategory(e.target.value)}
+                        >
+                          {BANDUNG_BRANCHES.map(branch => (
+                            <option key={branch.code} value={branch.code}>
+                              {branch.name} ({branch.code})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {editingItem ? (
+                        <div className="grid grid-cols-2 gap-3 mt-2">
+                          <button
+                            type="button"
+                            onClick={handleCancelEdit}
+                            className="w-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold py-3.5 rounded-2xl transition-all active:scale-95 text-center text-xs uppercase tracking-wider"
+                          >
+                            Batal
+                          </button>
+                          <button
+                            type="submit"
+                            className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-3.5 rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-95 shadow-md text-xs uppercase tracking-wider"
+                          >
+                            Update Data
+                          </button>
+                        </div>
+                      ) : (
+                        <button type="submit" className="w-full mt-2 bg-indigo-900 dark:bg-indigo-600 text-white font-bold py-3.5 rounded-2xl hover:bg-black dark:hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 active:scale-95 shadow-md">
+                          <Plus size={16} /> Simpan Data Arsip
+                        </button>
+                      )}
+                    </form>
+                  </div>
+
+                  {/* Right Column: Box Grid & Table Database */}
+                  <div className="xl:col-span-2 space-y-6">
+
+                    {/* Daftar Box / Dus Fisik */}
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <h3 className="font-black text-xs uppercase text-slate-400 dark:text-slate-500 tracking-widest">Grup Dus Fisik</h3>
+                        <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase">Pilih Box Untuk Filter Tabel</span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {getBoxesSummary().map(box => (
+                          <div
+                            key={box.boxNumber}
+                            className={`bg-white dark:bg-slate-800 p-5 rounded-3xl border shadow-sm flex flex-col justify-between hover:shadow-md transition-all duration-300 relative overflow-hidden group ${filterBoxNumber === box.boxNumber ? 'border-2 border-indigo-600 ring-2 ring-indigo-500/20' : 'border-slate-100 dark:border-slate-700'}`}
+                          >
+                            {filterBoxNumber === box.boxNumber && (
+                              <div className="absolute top-0 right-0 w-8 h-8 bg-indigo-600 text-white flex items-center justify-center rounded-bl-2xl">
+                                <CheckCircle2 size={14} />
+                              </div>
+                            )}
+                            <div>
+                              <div className="flex justify-between items-start mb-3">
+                                <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shadow-inner">
+                                  <Database size={20} />
+                                </div>
+                                <span className="text-[9px] font-black uppercase px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                                  Box {String(box.boxNumber).padStart(2, '0')}
+                                </span>
+                              </div>
+
+                              <h4 className="font-black text-slate-800 dark:text-white text-base">Kotak Dus {box.boxNumber}</h4>
+                              <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase mt-1 tracking-tight">
+                                {box.items.length} Dokumen • JRA Max: {box.destructionYear}
+                              </p>
+
+                              <div className="mt-3 flex flex-wrap gap-1">
+                                {Array.from(box.classifications).slice(0, 3).map(code => (
+                                  <span key={code} className="text-[8px] font-extrabold px-2 py-0.5 bg-slate-50 dark:bg-slate-900/50 text-indigo-600 dark:text-slate-400 rounded-md border border-slate-100 dark:border-slate-700">
+                                    {code}
+                                  </span>
+                                ))}
+                                {box.classifications.size > 3 && (
+                                  <span className="text-[8px] font-extrabold px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-md">
+                                    +{box.classifications.size - 3}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="mt-5 grid grid-cols-2 gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (filterBoxNumber === box.boxNumber) {
+                                    setFilterBoxNumber('');
+                                  } else {
+                                    setFilterBoxNumber(box.boxNumber);
+                                  }
+                                }}
+                                className={`py-2 text-[10px] font-black uppercase tracking-wider rounded-xl transition ${filterBoxNumber === box.boxNumber ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-slate-50 dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300'}`}
+                              >
+                                {filterBoxNumber === box.boxNumber ? "Aktif" : "Filter"}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => setPrintBoxNumber(box.boxNumber)}
+                                className="py-2 bg-indigo-900 dark:bg-indigo-600 hover:bg-black dark:hover:bg-indigo-700 text-white font-black text-[10px] uppercase tracking-wider rounded-xl transition flex items-center justify-center gap-1 shadow-md active:scale-95"
+                              >
+                                <Printer size={10} /> Label DIK
+                              </button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                       <button className="p-2 text-slate-300 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition"><Download size={20} /></button>
-                       <ChevronRight size={20} className="text-slate-100 dark:text-slate-700 group-hover:text-indigo-600 dark:group-hover:text-indigo-400" />
+
+                    {/* Tabel Database Kearsipan */}
+                    <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700 overflow-hidden shadow-sm transition-all duration-300">
+
+                      {/* Filter & Search Bar */}
+                      <div className="p-5 border-b border-slate-100 dark:border-slate-700 flex flex-col md:flex-row gap-4 items-stretch md:items-center justify-between bg-slate-50/50 dark:bg-slate-900/20">
+                        <div>
+                          <h3 className="font-black text-xs uppercase text-slate-800 dark:text-white tracking-wide">Database Kearsipan Fisik</h3>
+                          <p className="text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase mt-1">
+                            {filterBoxNumber ? `Menampilkan Box ${filterBoxNumber}` : 'Menampilkan Seluruh Dokumen'} ({filteredPhysicalArchives.length} item)
+                          </p>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+                          {/* Tombol Import Excel */}
+                          <button
+                            type="button"
+                            onClick={() => document.getElementById('excel-import-input').click()}
+                            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500/20 dark:hover:bg-emerald-500/30 text-white dark:text-emerald-400 border border-transparent dark:border-emerald-500/30 text-[9px] font-black uppercase tracking-wider rounded-xl shadow-sm flex items-center justify-center gap-1.5 transition active:scale-95 shrink-0"
+                            title="Unggah file Excel (.xlsx / .xls)"
+                          >
+                            <Upload size={12} />
+                            Import Excel
+                          </button>
+                          <input
+                            id="excel-import-input"
+                            type="file"
+                            accept=".xlsx, .xls"
+                            className="hidden"
+                            onChange={handleExcelImport}
+                          />
+
+                          {/* Tombol Export Excel */}
+                          <button
+                            type="button"
+                            onClick={handleExcelExport}
+                            className="px-3.5 py-2 bg-indigo-900 hover:bg-black dark:bg-indigo-600 dark:hover:bg-indigo-700 text-white text-[9px] font-black uppercase tracking-wider rounded-xl shadow-sm flex items-center justify-center gap-1.5 transition active:scale-95 shrink-0"
+                            title="Unduh database ke Excel"
+                          >
+                            <Download size={12} />
+                            Export Excel
+                          </button>
+
+                          {/* Tombol Reset Database */}
+                          <button
+                            type="button"
+                            onClick={handleResetDatabase}
+                            className="px-3.5 py-2 bg-slate-500 hover:bg-slate-600 dark:bg-slate-700 dark:hover:bg-slate-650 text-white text-[9px] font-black uppercase tracking-wider rounded-xl shadow-sm flex items-center justify-center gap-1.5 transition active:scale-95 shrink-0"
+                            title="Reset database ke data awal"
+                          >
+                            <RotateCcw size={12} />
+                            Reset Data
+                          </button>
+
+                          {filterBoxNumber && (
+                            <button
+                              onClick={() => setFilterBoxNumber('')}
+                              className="px-3 py-2 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 text-[9px] font-black uppercase tracking-wider rounded-xl border border-indigo-100 dark:border-indigo-900 flex items-center justify-center gap-1"
+                            >
+                              Reset Filter Box <X size={10} />
+                            </button>
+                          )}
+
+                          <div className="relative flex items-center bg-slate-50 dark:bg-slate-700 border border-slate-100 dark:border-slate-600 rounded-xl px-3 py-1.5 shrink-0">
+                            <Search size={14} className="text-slate-400" />
+                            <input
+                              type="text"
+                              placeholder="Cari judul/kode..."
+                              className="bg-transparent pl-2 text-xs font-semibold text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 outline-none w-full sm:w-40"
+                              value={searchPhysicalQuery}
+                              onChange={e => setSearchPhysicalQuery(e.target.value)}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Table List */}
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs font-medium border-collapse">
+                          <thead>
+                            <tr className="border-b border-slate-100 dark:border-slate-700 text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider bg-slate-50/50 dark:bg-slate-900/10">
+                              <th className="p-4 text-center w-28">No / Aksi</th>
+                              <th className="p-4">Kode Klasifikasi</th>
+                              <th className="p-4">Masalah / Judul Arsip</th>
+                              <th className="p-4 text-center">Tahun Awal</th>
+                              <th className="p-4 text-center">Tahun Akhir</th>
+                              <th className="p-4 text-center">JRA</th>
+                              <th className="p-4 text-center">Tahun Musnah</th>
+                              <th className="p-4 text-center">No. Media</th>
+                              <th className="p-4 text-center">No. Kotak</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-50 dark:divide-slate-700/50">
+                            {filteredPhysicalArchives.length > 0 ? (
+                              filteredPhysicalArchives.map((item, index) => (
+                                <tr key={item.id} className={`hover:bg-slate-50/50 dark:hover:bg-slate-700/20 text-slate-700 dark:text-slate-300 font-semibold transition ${editingItem && editingItem.id === item.id ? 'bg-amber-50/30 dark:bg-amber-950/10' : ''}`}>
+                                  <td className="p-4 text-center font-bold text-slate-400 dark:text-slate-500">
+                                    <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
+                                      <span className="text-[11px] font-black">{index + 1}</span>
+                                      <div className="flex gap-1 shrink-0">
+                                        <button
+                                          onClick={() => handleStartEdit(item)}
+                                          className={`p-1.5 rounded-lg border transition ${editingItem && editingItem.id === item.id ? 'bg-amber-500 border-amber-500 text-white' : 'bg-slate-50 hover:bg-amber-50 border-slate-200 hover:border-amber-200 text-slate-500 hover:text-amber-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400 dark:hover:text-amber-500'}`}
+                                          title="Edit Data"
+                                        >
+                                          <Edit2 size={11} />
+                                        </button>
+                                        <button
+                                          onClick={() => handleDeletePhysicalArchive(item.id)}
+                                          className="p-1.5 bg-slate-50 hover:bg-red-50 border border-slate-200 hover:border-red-200 text-slate-500 hover:text-red-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400 dark:hover:text-red-500 rounded-lg transition"
+                                          title="Hapus Data"
+                                        >
+                                          <Trash2 size={11} />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="p-4 font-mono font-bold text-indigo-900 dark:text-indigo-400">{item.classificationCode}</td>
+                                  <td className="p-4">
+                                    <div className="font-bold text-slate-800 dark:text-slate-100">{item.title}</div>
+                                    <div className="text-[9px] text-slate-400 dark:text-slate-500 font-normal mt-0.5">Cabang: {item.kategoriUnit}</div>
+                                  </td>
+                                  <td className="p-4 text-center">{formatDateExcel(item.startDate)}</td>
+                                  <td className="p-4 text-center">{formatDateExcel(item.endDate)}</td>
+                                  <td className="p-4 text-center"><span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 rounded-md font-bold">{item.jra} Thn</span></td>
+                                  <td className="p-4 text-center font-bold text-red-500 dark:text-red-400">{item.destructionYear}</td>
+                                  <td className="p-4 text-center font-mono font-bold">{item.mediaNumber}</td>
+                                  <td className="p-4 text-center"><span className="px-2 py-1 bg-indigo-50 dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 rounded-lg font-bold">Box {item.boxNumber}</span></td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr>
+                                <td colSpan="9" className="p-12 text-center text-slate-300 dark:text-slate-500">
+                                  <Database size={40} className="mx-auto mb-3 opacity-15" />
+                                  <p className="text-xs font-bold uppercase tracking-widest">Tidak ada data arsip fisik ditemukan</p>
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   </div>
-                )) : (
-                  <div className="py-32 text-center">
-                    <div className="w-20 h-20 bg-slate-50 dark:bg-slate-700/30 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-100 dark:border-slate-700">
-                       <Database size={32} className="text-slate-200 dark:text-slate-600" />
-                    </div>
-                    <p className="text-slate-300 dark:text-slate-500 font-black text-xs uppercase tracking-[0.2em]">Silakan masukkan kueri pencarian arsip</p>
-                  </div>
-                )}
+
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 
         {/* Tab Content: Layanan Nasabah */}
         {activeTab === 'crm' && (
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 animate-in fade-in duration-500 h-[calc(100vh-250px)]">
-            <div className="lg:col-span-1 bg-white dark:bg-slate-800 rounded-3xl shadow-sm dark:shadow-none border border-slate-100 dark:border-slate-700 flex flex-col overflow-hidden transition-all duration-300">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-auto lg:h-[calc(100vh-250px)] animate-in fade-in duration-500">
+            <div className="lg:col-span-1 bg-white dark:bg-slate-800 rounded-3xl shadow-sm dark:shadow-none border border-slate-100 dark:border-slate-700 flex flex-col overflow-hidden transition-all duration-300 max-h-[200px] lg:max-h-none">
               <div className="p-5 border-b border-slate-100 dark:border-slate-700 font-black text-[10px] uppercase text-slate-400 dark:text-slate-500 tracking-widest bg-slate-50/50 dark:bg-slate-900/20">Antrean Interaksi Nasabah</div>
               <div className="flex-1 overflow-y-auto">
                 <div className="p-5 bg-orange-50 dark:bg-orange-950/20 border-l-4 border-orange-500 cursor-pointer shadow-inner">
@@ -468,42 +1651,42 @@ const App = () => {
               </div>
             </div>
 
-            <div className="lg:col-span-3 bg-white dark:bg-slate-800 rounded-3xl shadow-xl dark:shadow-none border border-slate-100 dark:border-slate-700 flex flex-col overflow-hidden relative transition-all duration-300">
+            <div className="lg:col-span-3 bg-white dark:bg-slate-800 rounded-3xl shadow-xl dark:shadow-none border border-slate-100 dark:border-slate-700 flex flex-col overflow-hidden relative transition-all duration-300 h-[600px] lg:h-full">
               {/* Chat Header */}
-              <div className="p-6 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50/30 dark:bg-slate-900/30">
+              <div className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-700 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center bg-slate-50/30 dark:bg-slate-900/30">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-indigo-100 dark:bg-slate-700 rounded-2xl flex items-center justify-center text-indigo-700 dark:text-indigo-400 font-black text-lg shadow-inner">AS</div>
-                  <div> 
-                    <p className="font-black text-slate-800 dark:text-slate-200 text-sm uppercase tracking-tight">Andi Setiawan</p> 
+                  <div>
+                    <p className="font-black text-slate-800 dark:text-slate-200 text-sm uppercase tracking-tight">Andi Setiawan</p>
                     <p className="text-[10px] text-green-500 font-bold uppercase tracking-widest flex items-center gap-1">
                       <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> Online
-                    </p> 
+                    </p>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <button onClick={handleCrmAssist} disabled={isCrmGenerating} className="bg-indigo-900 dark:bg-indigo-600 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-black dark:hover:bg-indigo-700 transition disabled:opacity-50 shadow-lg dark:shadow-none">
-                    {isCrmGenerating ? <Loader2 className="animate-spin" size={16}/> : <Sparkles size={16} className="text-orange-400"/>} GEN-AI ASSIST
+                <div className="w-full sm:w-auto">
+                  <button onClick={handleCrmAssist} disabled={isCrmGenerating} className="w-full sm:w-auto bg-indigo-900 dark:bg-indigo-600 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-black dark:hover:bg-indigo-700 transition disabled:opacity-50 shadow-lg dark:shadow-none">
+                    {isCrmGenerating ? <Loader2 className="animate-spin" size={16} /> : <Sparkles size={16} className="text-orange-400" />} GEN-AI ASSIST
                   </button>
                 </div>
               </div>
 
               {/* Chat Body */}
-              <div className="flex-1 p-8 overflow-y-auto space-y-6 bg-slate-50/30 dark:bg-slate-900/20 scroll-smooth">
-                <div className="max-w-[80%] bg-white dark:bg-slate-700 p-5 rounded-3xl rounded-tl-none text-sm text-slate-700 dark:text-slate-200 shadow-sm border border-slate-100 dark:border-slate-600 leading-relaxed transition-all duration-300"> 
-                  "Selamat siang, saya mau tanya syarat pengajuan KPR apa saja ya? Dan apakah sertifikat SHM yang saya kirim kemarin sudah terverifikasi di sistem?" 
+              <div className="flex-1 p-4 sm:p-8 overflow-y-auto space-y-6 bg-slate-50/30 dark:bg-slate-900/20 scroll-smooth">
+                <div className="max-w-[90%] sm:max-w-[80%] bg-white dark:bg-slate-700 p-4 sm:p-5 rounded-3xl rounded-tl-none text-sm text-slate-700 dark:text-slate-200 shadow-sm border border-slate-100 dark:border-slate-600 leading-relaxed transition-all duration-300">
+                  "Selamat siang, saya mau tanya syarat pengajuan KPR apa saja ya? Dan apakah sertifikat SHM yang saya kirim kemarin sudah terverifikasi di sistem?"
                 </div>
 
                 {crmResponse && (
                   <div className="flex justify-end animate-in slide-in-from-right-4 duration-500">
-                    <div className="max-w-[85%] bg-indigo-950 dark:bg-slate-900 text-white p-6 rounded-3xl rounded-tr-none shadow-2xl dark:shadow-none border border-transparent dark:border-slate-700 border-l-4 border-l-orange-500 dark:border-l-orange-500 transition-all duration-300">
+                    <div className="max-w-[95%] sm:max-w-[85%] bg-indigo-950 dark:bg-slate-900 text-white p-5 sm:p-6 rounded-3xl rounded-tr-none shadow-2xl dark:shadow-none border border-transparent dark:border-slate-700 border-l-4 border-l-orange-500 dark:border-l-orange-500 transition-all duration-300">
                       <div className="flex items-center gap-2 mb-3 border-b border-white/10 dark:border-slate-700/50 pb-2">
-                        <Sparkles size={14} className="text-orange-400"/>
+                        <Sparkles size={14} className="text-orange-400" />
                         <p className="text-[9px] font-black text-orange-400 uppercase tracking-[0.2em]">Gen-AI Draft</p>
                       </div>
                       <p className="text-sm leading-relaxed italic text-indigo-50 dark:text-slate-300 font-medium">"{crmResponse}"</p>
-                      <div className="mt-6 flex justify-end gap-3">
-                        <button className="text-[9px] font-black px-4 py-2 bg-white/10 dark:bg-slate-800 rounded-xl hover:bg-white/20 dark:hover:bg-slate-700 uppercase tracking-widest transition">Sempurnakan</button>
-                        <button className="text-[9px] font-black px-4 py-2 bg-orange-500 rounded-xl hover:bg-orange-600 uppercase tracking-widest transition shadow-lg">Kirim Balasan</button>
+                      <div className="mt-6 flex flex-col sm:flex-row justify-end gap-3">
+                        <button className="text-[9px] font-black px-4 py-2 bg-white/10 dark:bg-slate-800 rounded-xl hover:bg-white/20 dark:hover:bg-slate-700 uppercase tracking-widest transition text-center">Sempurnakan</button>
+                        <button className="text-[9px] font-black px-4 py-2 bg-orange-500 rounded-xl hover:bg-orange-600 uppercase tracking-widest transition shadow-lg text-center">Kirim Balasan</button>
                       </div>
                     </div>
                   </div>
@@ -511,17 +1694,17 @@ const App = () => {
               </div>
 
               {/* Chat Input */}
-              <div className="p-6 border-t bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 shadow-2xl transition-all duration-300">
+              <div className="p-4 sm:p-6 border-t bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 shadow-2xl transition-all duration-300">
                 <div className="relative">
-                  <textarea 
-                    placeholder="Tulis pesan manual atau gunakan AI Assist..." 
-                    className="w-full bg-slate-50 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-700 rounded-2xl p-5 pr-20 text-sm resize-none focus:ring-2 focus:ring-indigo-900 dark:focus:ring-indigo-400 transition-all outline-none h-24 shadow-inner dark:shadow-none font-medium text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500" 
-                    value={userChatInput} 
+                  <textarea
+                    placeholder="Tulis pesan manual atau gunakan AI Assist..."
+                    className="w-full bg-slate-50 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-700 rounded-2xl p-4 pr-20 text-sm resize-none focus:ring-2 focus:ring-indigo-900 dark:focus:ring-indigo-400 transition-all outline-none h-24 shadow-inner dark:shadow-none font-medium text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
+                    value={userChatInput}
                     onChange={e => setUserChatInput(e.target.value)}
                   ></textarea>
                   <div className="absolute right-4 bottom-4 flex gap-2">
-                    <button className="w-12 h-12 bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 rounded-2xl flex items-center justify-center hover:bg-slate-200 dark:hover:bg-slate-600 transition"><Paperclip size={20}/></button>
-                    <button className="w-12 h-12 bg-indigo-900 dark:bg-indigo-600 text-white rounded-2xl flex items-center justify-center hover:bg-black dark:hover:bg-indigo-700 shadow-xl dark:shadow-none transition active:scale-90"><Send size={20}/></button>
+                    <button className="w-10 h-10 sm:w-12 sm:h-12 bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 rounded-2xl flex items-center justify-center hover:bg-slate-200 dark:hover:bg-slate-600 transition"><Paperclip size={20} /></button>
+                    <button className="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-900 dark:bg-indigo-600 text-white rounded-2xl flex items-center justify-center hover:bg-black dark:hover:bg-indigo-700 shadow-xl dark:shadow-none transition active:scale-90"><Send size={20} /></button>
                   </div>
                 </div>
               </div>
@@ -529,6 +1712,180 @@ const App = () => {
           </div>
         )}
       </main>
+
+      {/* --- MODAL PRATINJAU & PRINT LABEL DIK --- */}
+      {printBoxNumber && (
+        <div className="fixed inset-0 z-[9999] bg-slate-900/85 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 overflow-y-auto no-print">
+          <div className="bg-slate-800 dark:bg-slate-800 w-full max-w-3xl rounded-3xl p-6 shadow-2xl flex flex-col max-h-[95vh]">
+
+            {/* Header Modal */}
+            <div className="flex justify-between items-center pb-4 mb-4 border-b border-slate-700 no-print">
+              <div className="flex items-center gap-2 text-white">
+                <Printer size={20} className="text-orange-400" />
+                <h3 className="font-black text-sm uppercase tracking-widest">Pratinjau Cetak Label DIK (Kotak {printBoxNumber})</h3>
+              </div>
+              <button
+                onClick={() => setPrintBoxNumber(null)}
+                className="p-2 text-slate-400 hover:text-white bg-slate-700 rounded-xl transition"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Scrollable Preview Frame */}
+            <div className="flex-1 overflow-y-auto p-4 bg-slate-700/50 rounded-2xl border border-slate-700 flex justify-center items-start">
+
+              {/* --- KOTAK CETAK DIK (RENDER ASLI) --- */}
+              <div
+                id="printable-dik"
+                className="bg-white text-black p-8 font-sans border-2 border-black max-w-[210mm] w-full shadow-lg relative leading-normal text-xs"
+                style={{ minHeight: '270mm' }}
+              >
+
+                {/* CSS Print Stylesheet Injection */}
+                <style dangerouslySetInnerHTML={{
+                  __html: `
+                  @media print {
+                    /* Menyembunyikan seluruh komponen halaman */
+                    body * {
+                      visibility: hidden !important;
+                    }
+                    /* Menampilkan area cetak */
+                    #printable-dik, #printable-dik * {
+                      visibility: visible !important;
+                    }
+                    #printable-dik {
+                      position: absolute !important;
+                      left: 0 !important;
+                      top: 0 !important;
+                      width: 100% !important;
+                      max-width: 100% !important;
+                      margin: 0 !important;
+                      padding: 20mm !important;
+                      border: none !important;
+                      box-shadow: none !important;
+                      background: white !important;
+                      color: black !important;
+                    }
+                    .no-print {
+                      display: none !important;
+                    }
+                  }
+                `}} />
+
+                {/* Judul Form */}
+                <div className="text-center mb-6">
+                  <h2 className="font-extrabold text-base tracking-wide uppercase leading-tight">Daftar Isi Kotak</h2>
+                  <h2 className="font-extrabold text-base tracking-wide uppercase leading-tight">(DIK)</h2>
+                </div>
+
+                {/* Tabel DIK */}
+                {(() => {
+                  const totalItemsCount = itemsToPrint.length;
+                  const tableFontSize = totalItemsCount > 15 ? 'text-[7px]' : totalItemsCount > 12 ? 'text-[8px]' : totalItemsCount > 9 ? 'text-[9px]' : 'text-[10px]';
+                  const rowHeightClass = totalItemsCount > 15 ? 'h-7' : totalItemsCount > 12 ? 'h-8' : totalItemsCount > 9 ? 'h-10' : 'h-12';
+                  const rowPaddingClass = totalItemsCount > 15 ? 'p-1' : totalItemsCount > 12 ? 'p-1.5' : 'p-2';
+                  const innerTitleFontSize = totalItemsCount > 15 ? 'text-[7.5px]' : totalItemsCount > 12 ? 'text-[8.5px]' : totalItemsCount > 9 ? 'text-[9px]' : 'text-[10px]';
+                  const innerDateFontSize = totalItemsCount > 15 ? 'text-[6px]' : totalItemsCount > 12 ? 'text-[6.5px]' : totalItemsCount > 9 ? 'text-[7px]' : 'text-[8px]';
+
+                  return (
+                    <table className={`w-full border-collapse border border-black mt-2 leading-tight font-sans ${tableFontSize}`}>
+                      <thead>
+                        <tr className="border-b border-black text-center font-bold">
+                          <th className={`border-r border-black ${rowPaddingClass} w-[8%] text-center uppercase`}>No Urut</th>
+                          <th className={`border-r border-black ${rowPaddingClass} w-[16%] text-center uppercase`}>Kode Klasifikasi</th>
+                          <th className={`border-r border-black ${rowPaddingClass} w-[14%] text-center uppercase`}>No. Media Simpan</th>
+                          <th className={`border-r border-black ${rowPaddingClass} w-[44%] text-left uppercase`}>Masalah/Judul Arsip</th>
+                          <th className={`border-r border-black ${rowPaddingClass} w-[10%] text-center uppercase`}>Jenis Arsip</th>
+                          <th className={`${rowPaddingClass} w-[8%] text-center uppercase`}>Tahun Arsip</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {paddedPrintRows.map((row, index) => {
+                          const isRowEmpty = !row.title;
+
+                          return (
+                            <tr key={row.id} className={`border-b border-black ${rowHeightClass}`}>
+                              <td className={`border-r border-black ${rowPaddingClass} text-center font-bold`}>
+                                {isRowEmpty ? '' : index + 1}
+                              </td>
+                              <td className={`border-r border-black ${rowPaddingClass} text-center font-mono font-bold`}>
+                                {row.classificationCode || ''}
+                              </td>
+                              <td className={`border-r border-black ${rowPaddingClass} text-center font-mono font-bold`}>
+                                {row.mediaNumber || ''}
+                              </td>
+                              <td className={`border-r border-black ${rowPaddingClass} text-left`}>
+                                {isRowEmpty ? (
+                                  <span>&nbsp;</span>
+                                ) : (
+                                  <div>
+                                    <div className={`font-bold ${innerTitleFontSize}`}>{row.title}</div>
+                                    {row.startDate && row.endDate && (
+                                      <div className={`${innerDateFontSize} mt-0.5 uppercase tracking-wide`}>
+                                        {formatDateIndo(row.startDate)} - {formatDateIndo(row.endDate)}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </td>
+                              <td className={`border-r border-black ${rowPaddingClass} text-center uppercase font-bold`}></td>
+                              <td className={`${rowPaddingClass} text-center font-bold`}>
+                                {row.endDate ? new Date(row.endDate).getFullYear() : ''}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  );
+                })()}
+
+                {/* Box Banner Tahun Musnah */}
+                <div className="border-l border-r border-b border-black py-2.5 text-center font-extrabold uppercase text-xs tracking-wider">
+                  Tahun Musnah: {printBoxDestructionYear}
+                </div>
+
+                {/* Bottom Metadata Grid */}
+                <div className="grid grid-cols-3 border-l border-r border-b border-black mt-4 h-24">
+                  {/* Left Cell: Branch Code */}
+                  <div className="border-r border-black p-4 flex items-center justify-center text-center font-sans font-black text-lg tracking-wider text-black uppercase shrink-0">
+                    {firstPrintItem?.kategoriUnit || 'BAN/BSE'}
+                  </div>
+
+                  {/* Middle Cell: Empty */}
+                  <div className="border-r border-black p-4"></div>
+
+                  {/* Right Cell: Massive Box Number */}
+                  <div className="p-4 flex items-center justify-center text-5xl font-black font-sans tracking-tighter text-black">
+                    {String(printBoxNumber).padStart(2, '0')}
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+
+            {/* Action Bar */}
+            <div className="mt-4 pt-4 border-t border-slate-700 flex justify-end gap-3 no-print">
+              <button
+                onClick={() => setPrintBoxNumber(null)}
+                className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white font-bold text-xs uppercase tracking-wider rounded-xl transition"
+              >
+                Batal
+              </button>
+              <button
+                onClick={() => window.print()}
+                className="px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white font-black text-xs uppercase tracking-wider rounded-xl transition flex items-center gap-2 shadow-lg shadow-orange-950/20 active:scale-95"
+              >
+                <Printer size={14} /> Cetak Label Sekarang
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
