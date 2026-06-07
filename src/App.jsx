@@ -4,7 +4,7 @@ import {
   User, Layout, ChevronRight, Loader2, Database, Info, Filter,
   Download, BarChart3, CheckCircle2, Lock,
   Eye, EyeOff, Paperclip, Sun, Moon, Menu, X, Plus, Trash2, Printer, ArrowLeft,
-  Upload, Edit2, RotateCcw
+  Upload, Edit2, RotateCcw, Copy, Check, AlertTriangle, ShieldAlert
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -201,6 +201,34 @@ const App = () => {
   const [foundArchives, setFoundArchives] = useState([]);
   const [isArchiveSearching, setIsArchiveSearching] = useState(false);
   const [archiveInsight, setArchiveInsight] = useState('');
+  const [selectedScanDoc, setSelectedScanDoc] = useState(null);
+  const [isScanningDoc, setIsScanningDoc] = useState(false);
+  const [scanResult, setScanResult] = useState(null);
+  const [toastMessage, setToastMessage] = useState('');
+
+  const [customerArchives, setCustomerArchives] = useState(() => {
+    const saved = localStorage.getItem('customer_archives');
+    return saved ? JSON.parse(saved) : CUSTOMER_ARCHIVES;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('customer_archives', JSON.stringify(customerArchives));
+  }, [customerArchives]);
+
+  const [isAddDocOpen, setIsAddDocOpen] = useState(false);
+  const [addDocName, setAddDocName] = useState('');
+  const [addDocCif, setAddDocCif] = useState('');
+  const [addDocFilename, setAddDocFilename] = useState('');
+  const [addDocCategory, setAddDocCategory] = useState('Identitas');
+  const [addDocCustomCategory, setAddDocCustomCategory] = useState('');
+  const [addDocSize, setAddDocSize] = useState('');
+
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => setToastMessage(''), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
 
   // --- STATE CRM ---
   const [isCrmGenerating, setIsCrmGenerating] = useState(false);
@@ -321,8 +349,10 @@ const App = () => {
     setIsArchiveSearching(true);
     setFoundArchives([]);
     setArchiveInsight('');
+    setSelectedScanDoc(null);
+    setScanResult(null);
     setTimeout(() => {
-      const results = CUSTOMER_ARCHIVES.filter(d =>
+      const results = customerArchives.filter(d =>
         d.name.toLowerCase().includes(archiveSearch.toLowerCase()) ||
         d.cif.toLowerCase().includes(archiveSearch.toLowerCase())
       );
@@ -332,6 +362,150 @@ const App = () => {
       }
       setIsArchiveSearching(false);
     }, 1500);
+  };
+
+  const handleCustomerFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setAddDocFilename(file.name);
+      
+      let sizeStr = '';
+      if (file.size > 1024 * 1024) {
+        sizeStr = (file.size / (1024 * 1024)).toFixed(1) + ' MB';
+      } else {
+        sizeStr = (file.size / 1024).toFixed(0) + ' KB';
+      }
+      setAddDocSize(sizeStr);
+    }
+  };
+
+  const handleAddCustomerDoc = (e) => {
+    e.preventDefault();
+    if (!addDocName || !addDocCif || !addDocFilename) {
+      setToastMessage('Harap lengkapi semua kolom!');
+      return;
+    }
+    
+    const finalCategory = addDocCategory === 'Lainnya' ? addDocCustomCategory.trim() : addDocCategory;
+    if (addDocCategory === 'Lainnya' && !addDocCustomCategory) {
+      setToastMessage('Harap tentukan kategori kustom!');
+      return;
+    }
+
+    const newDoc = {
+      id: Date.now(),
+      name: addDocName.trim(),
+      doc: addDocFilename.trim(),
+      cat: finalCategory,
+      cif: addDocCif.trim().toUpperCase(),
+      size: addDocSize || '350 KB'
+    };
+    
+    const updated = [...customerArchives, newDoc];
+    setCustomerArchives(updated);
+    setToastMessage(`Dokumen "${addDocFilename}" berhasil ditambahkan!`);
+    
+    // Reset Form
+    setAddDocName('');
+    setAddDocCif('');
+    setAddDocFilename('');
+    setAddDocCategory('Identitas');
+    setAddDocCustomCategory('');
+    setAddDocSize('');
+    setIsAddDocOpen(false);
+
+    // Update real-time search results if they match the query
+    if (archiveSearch) {
+      const isMatch = newDoc.name.toLowerCase().includes(archiveSearch.toLowerCase()) ||
+                      newDoc.cif.toLowerCase().includes(archiveSearch.toLowerCase());
+      if (isMatch) {
+        setFoundArchives(prev => [...prev, newDoc]);
+      }
+    }
+  };
+
+  const handleEcmDocScan = (doc) => {
+    setSelectedScanDoc(doc);
+    setIsScanningDoc(true);
+    setScanResult(null);
+    setTimeout(() => {
+      let result = null;
+      if (doc.id === 101) {
+        result = {
+          status: 'Warning',
+          risk: 'Medium Risk',
+          riskColor: 'text-amber-600 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200 dark:border-amber-900',
+          statusColor: 'text-amber-600 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-400',
+          checklist: [
+            { label: 'Keterbacaan OCR Teks', status: 'PASS', details: 'Akurasi pembacaan 98%' },
+            { label: 'Kesesuaian NIK (Dukcapil)', status: 'PASS', details: 'Terdaftar aktif' },
+            { label: 'Kecocokan Wajah vs Foto KTP', status: 'PASS', details: 'Tingkat kemiripan 92%' },
+            { label: 'Kesesuaian Tanda Tangan', status: 'PASS', details: 'Sesuai dengan spesimen kartu tanda tangan' },
+            { label: 'Masa Berlaku Dokumen', status: 'WARNING', details: 'Akan berakhir dalam 6 bulan (Desember 2026)' },
+          ],
+          recommendation: 'KTP terverifikasi dengan database Dukcapil. Namun, dokumen ini akan kadaluarsa dalam 6 bulan. Direkomendasikan melakukan pembaruan dokumen saat nasabah bertransaksi di kantor cabang terdekat atau melalui pembaruan profil digital.'
+        };
+      } else if (doc.id === 102) {
+        result = {
+          status: 'Valid',
+          risk: 'Low Risk',
+          riskColor: 'text-green-600 bg-green-50 dark:bg-green-950/40 dark:text-green-400 border border-green-200 dark:border-green-900',
+          statusColor: 'text-green-600 bg-green-50 dark:bg-green-950/40 dark:text-green-400',
+          checklist: [
+            { label: 'Verifikasi Database BPN', status: 'PASS', details: 'Sertifikat terdaftar resmi di BPN' },
+            { label: 'Keaslian Tanda Tangan & Cap', status: 'PASS', details: 'Tervalidasi secara digital' },
+            { label: 'Kesesuaian Lokasi Agunan', status: 'PASS', details: 'Setiabudi, Bandung (Sesuai form pengajuan)' },
+            { label: 'Kesesuaian Nama Pemilik', status: 'PASS', details: 'Nama pemilik cocok dengan Andi Setiawan' },
+            { label: 'Status Bebas Sengketa', status: 'PASS', details: 'Tidak ada catatan sengketa atau sita jaminan' },
+          ],
+          recommendation: 'Sertifikat Hak Milik (SHM) No. 442 atas nama Andi Setiawan telah diverifikasi valid oleh Badan Pertanahan Nasional (BPN). Agunan dan kepemilikan sah untuk proses kredit.'
+        };
+      } else if (doc.id === 103) {
+        result = {
+          status: 'Valid',
+          risk: 'Low Risk',
+          riskColor: 'text-green-600 bg-green-50 dark:bg-green-950/40 dark:text-green-400 border border-green-200 dark:border-green-900',
+          statusColor: 'text-green-600 bg-green-50 dark:bg-green-950/40 dark:text-green-400',
+          checklist: [
+            { label: 'Kelengkapan Formulir', status: 'PASS', details: 'Seluruh field wajib terisi penuh' },
+            { label: 'Verifikasi Tanda Tangan', status: 'PASS', details: 'Cocok dengan spesimen tanda tangan' },
+            { label: 'Validasi CIF Nasabah', status: 'PASS', details: 'CIF aktif (CIF88273)' },
+            { label: 'Screening KYC & AML', status: 'PASS', details: 'Bebas dari daftar PEP & Sanctions list' },
+          ],
+          recommendation: 'Formulir pembukaan rekening lengkap dan valid. Hasil screening KYC & AML menunjukkan profil risiko pencucian uang sangat rendah.'
+        };
+      } else if (doc.id === 104) {
+        result = {
+          status: 'Warning',
+          risk: 'Medium Risk',
+          riskColor: 'text-amber-600 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200 dark:border-amber-900',
+          statusColor: 'text-amber-600 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-400',
+          checklist: [
+            { label: 'Verifikasi Instansi / Pemberi Kerja', status: 'PASS', details: 'PT Maju Mundur Tbk (Aktif)' },
+            { label: 'Validasi Perhitungan Matematis', status: 'PASS', details: 'Kalkulasi pajak dan potongan tepat' },
+            { label: 'Kejelasan Cap & Tanda Tangan', status: 'WARNING', details: 'Tanda tangan ada, namun stempel perusahaan agak buram' },
+            { label: 'Kesesuaian Mutasi Rekening', status: 'PASS', details: 'Kredit gaji bulanan sesuai dengan slip' },
+          ],
+          recommendation: 'Slip gaji valid secara perhitungan dan sesuai dengan mutasi rekening. Namun, stempel perusahaan terdeteksi sedikit buram. Disarankan untuk membandingkan dengan SPT Tahunan atau rekening koran 3 bulan terakhir.'
+        };
+      } else {
+        result = {
+          status: 'Valid',
+          risk: 'Low Risk',
+          riskColor: 'text-green-600 bg-green-50 dark:bg-green-950/40 dark:text-green-400 border border-green-200 dark:border-green-900',
+          statusColor: 'text-green-600 bg-green-50 dark:bg-green-950/40 dark:text-green-400',
+          checklist: [
+            { label: 'Integritas Berkas File', status: 'PASS', details: `Format berkas terbaca dengan sempurna (${doc.size || '350 KB'})` },
+            { label: 'Pembacaan Metadata File', status: 'PASS', details: 'Informasi pengunggah dan tanggal terekam' },
+            { label: 'Kesesuaian Kategori Dokumen', status: 'PASS', details: `Kategori otomatis sesuai dengan: ${doc.cat || 'Umum'}` },
+            { label: 'Deteksi Virus / Malware', status: 'PASS', details: 'Berkas bersih dan aman' },
+          ],
+          recommendation: `Dokumen "${doc.doc || doc.title || 'Dokumen'}" telah discan secara aman oleh AI Engine. Semua data struktural terbaca dengan baik dan tidak ditemukan tanda-tanda manipulasi dokumen.`
+        };
+      }
+      setScanResult(result);
+      setIsScanningDoc(false);
+    }, 1200);
   };
 
   const handleCrmAssist = async () => {
@@ -1235,8 +1409,14 @@ const App = () => {
                 <div className="bg-indigo-900 dark:bg-slate-800 text-white p-6 sm:p-10 rounded-3xl shadow-xl dark:shadow-none border border-transparent dark:border-slate-700 relative overflow-hidden transition-all duration-300">
                   <div className="absolute right-[-20px] top-[-20px] opacity-10"><Database size={200} /></div>
                   <div className="relative z-10">
-                    <h2 className="text-xl sm:text-2xl font-black mb-6 flex items-center gap-3 uppercase tracking-tight">
-                      <Sparkles size={28} className="text-white-400" /> Cari Arsip Nasabah
+                    <h2 className="text-xl sm:text-2xl font-black mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 uppercase tracking-tight">
+                      <span className="flex items-center gap-3"><Sparkles size={28} className="text-white-400" /> Cari Arsip Nasabah</span>
+                      <button 
+                        onClick={() => setIsAddDocOpen(true)}
+                        className="flex items-center justify-center gap-2 text-xs font-black bg-white/10 hover:bg-white/20 text-white px-4 py-2.5 rounded-xl border border-white/10 transition active:scale-95 uppercase tracking-wider shrink-0"
+                      >
+                        <Plus size={16} /> Tambah Dokumen
+                      </button>
                     </h2>
                     <div className="flex flex-col sm:flex-row gap-3 bg-white/10 p-3 rounded-2xl backdrop-blur-md border border-white/20">
                       <input
@@ -1270,36 +1450,223 @@ const App = () => {
                   </div>
                 )}
 
-                <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm dark:shadow-none border border-slate-100 dark:border-slate-700 overflow-hidden min-h-[300px] transition-all duration-300">
-                  <div className="p-6 border-b border-slate-50 dark:border-slate-700/50 flex flex-col sm:flex-row gap-2 justify-between items-start sm:items-center bg-slate-50/50 dark:bg-slate-900/20">
-                    <h3 className="font-black text-xs uppercase text-slate-400 dark:text-slate-500 tracking-widest">Data Scanned Nasabah</h3>
-                    <span className="text-[10px] font-black bg-indigo-100 dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 px-3 py-1 rounded-full uppercase">Total: {foundArchives.length} Dokumen</span>
-                  </div>
-                  <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
-                    {foundArchives.length > 0 ? foundArchives.map(f => (
-                      <div key={f.id} className="p-6 flex items-center justify-between group hover:bg-slate-50 dark:hover:bg-slate-700/30 transition cursor-pointer">
-                        <div className="flex items-center gap-5 min-w-0 flex-1 mr-4">
-                          <div className="w-12 h-12 bg-white dark:bg-slate-700 border border-slate-100 dark:border-slate-600 rounded-2xl flex items-center justify-center text-slate-300 dark:text-slate-500 group-hover:text-indigo-600 dark:hover:text-indigo-400 group-hover:border-indigo-100 dark:group-hover:border-indigo-900 group-hover:shadow-sm transition shrink-0">
-                            <FileText size={24} />
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                  {/* Left Column: List of found documents */}
+                  <div className="lg:col-span-5 bg-white dark:bg-slate-800 rounded-3xl shadow-sm dark:shadow-none border border-slate-100 dark:border-slate-700 overflow-hidden min-h-[350px] transition-all duration-300">
+                    <div className="p-6 border-b border-slate-50 dark:border-slate-700/50 flex flex-col sm:flex-row gap-2 justify-between items-start sm:items-center bg-slate-50/50 dark:bg-slate-900/20">
+                      <h3 className="font-black text-xs uppercase text-slate-400 dark:text-slate-500 tracking-widest">Hasil Pemindaian</h3>
+                      <span className="text-[10px] font-black bg-indigo-100 dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 px-3 py-1 rounded-full uppercase">Total: {foundArchives.length}</span>
+                    </div>
+                    <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
+                      {foundArchives.length > 0 ? foundArchives.map(f => {
+                        const isSelected = selectedScanDoc && selectedScanDoc.id === f.id;
+                        let statusIcon = null;
+                        if (f.id === 101 || f.id === 104) {
+                          statusIcon = <AlertTriangle className="text-amber-500 shrink-0" size={13} />;
+                        } else {
+                          statusIcon = <Check className="text-green-500 shrink-0" size={13} />;
+                        }
+
+                        return (
+                          <div
+                            key={f.id}
+                            onClick={() => handleEcmDocScan(f)}
+                            className={`p-5 flex items-center justify-between group hover:bg-slate-50 dark:hover:bg-slate-700/30 transition cursor-pointer relative ${
+                              isSelected ? 'bg-indigo-50/50 dark:bg-indigo-950/20 border-l-4 border-l-orange-500 dark:border-l-indigo-500' : ''
+                            }`}
+                          >
+                            <div className="flex items-center gap-4 min-w-0 flex-1 mr-3">
+                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border transition ${
+                                isSelected
+                                  ? 'bg-orange-50 border-orange-200 dark:bg-indigo-900/30 dark:border-indigo-800 text-orange-600 dark:text-indigo-400 shadow-sm'
+                                  : 'bg-white dark:bg-slate-700 border-slate-100 dark:border-slate-600 text-slate-300 dark:text-slate-500 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 group-hover:border-indigo-100 dark:group-hover:border-indigo-900'
+                              }`}>
+                                <FileText size={20} />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <p className="font-black text-slate-800 dark:text-slate-200 text-xs sm:text-sm truncate">{f.doc}</p>
+                                  {statusIcon}
+                                </div>
+                                <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider mt-1 truncate">
+                                  Nasabah: <span className="text-slate-600 dark:text-slate-300">{f.name}</span>
+                                </p>
+                                <p className="text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider truncate">
+                                  CIF: {f.cif} • Kat: {f.cat}
+                                </p>
+                              </div>
+                            </div>
+                            <ChevronRight size={16} className={`shrink-0 transition-transform ${
+                              isSelected ? 'translate-x-1 text-orange-500 dark:text-indigo-400' : 'text-slate-100 dark:text-slate-700 group-hover:text-indigo-600 dark:group-hover:text-indigo-400'
+                            }`} />
                           </div>
-                          <div className="min-w-0">
-                            <p className="font-black text-slate-800 dark:text-slate-200 truncate">{f.doc}</p>
-                            <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider mt-1 truncate">
-                              Nasabah: <span className="text-slate-600 dark:text-slate-300">{f.name}</span> • Kategori: {f.cat} • CIF: {f.cif}
+                        );
+                      }) : (
+                        <div className="py-24 text-center">
+                          <div className="w-16 h-16 bg-slate-50 dark:bg-slate-700/30 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-100 dark:border-slate-700">
+                            <Database size={24} className="text-slate-200 dark:text-slate-600" />
+                          </div>
+                          <p className="text-slate-300 dark:text-slate-500 font-black text-[10px] uppercase tracking-wider px-4">Masukkan kata kunci pencarian</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right Column: AI Scan Detail Panel */}
+                  <div className="lg:col-span-7">
+                    {isScanningDoc ? (
+                      <div className="bg-white dark:bg-slate-800 p-8 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-sm flex flex-col items-center justify-center min-h-[350px] text-center relative overflow-hidden transition-all duration-300">
+                        {/* Scanning Glowing Line animation */}
+                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-indigo-500 dark:via-indigo-400 to-transparent animate-pulse"></div>
+                        <Loader2 className="animate-spin text-indigo-600 dark:text-indigo-400 mb-4" size={36} />
+                        <h4 className="text-slate-800 dark:text-slate-200 font-black text-xs uppercase tracking-[0.2em] animate-pulse">AI Scan Engine Aktif</h4>
+                        <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-2 font-medium">Mengecek OCR, validitas NIK, & keaslian stempel...</p>
+                      </div>
+                    ) : selectedScanDoc && scanResult ? (
+                      <div className="bg-white dark:bg-slate-800 p-6 sm:p-8 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-sm transition-all duration-300 space-y-6">
+                        {/* Detail Header */}
+                        <div className="flex flex-col sm:flex-row justify-between items-start gap-4 pb-4 border-b border-slate-100 dark:border-slate-700/50">
+                          <div>
+                            <span className="text-[9px] font-black bg-indigo-50 dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 px-3 py-1 rounded-full uppercase tracking-wider">
+                              Laporan Scan AI
+                            </span>
+                            <h3 className="text-base sm:text-lg font-black text-slate-800 dark:text-white mt-2 leading-tight">
+                              {selectedScanDoc.doc}
+                            </h3>
+                            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-1">
+                              CIF: {selectedScanDoc.cif} • Nasabah: {selectedScanDoc.name}
                             </p>
                           </div>
+                          <div className="flex gap-2 shrink-0">
+                            <span className={`text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest border ${scanResult.riskColor}`}>
+                              {scanResult.risk}
+                            </span>
+                            <span className={`text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest ${
+                              scanResult.status === 'Valid'
+                                ? 'bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400'
+                                : scanResult.status === 'Flagged'
+                                  ? 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400'
+                                  : 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400'
+                            }`}>
+                              {scanResult.status}
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-                          <button className="p-2 text-slate-300 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition"><Download size={20} /></button>
-                          <ChevronRight size={20} className="text-slate-100 dark:text-slate-700 group-hover:text-indigo-600 dark:group-hover:text-indigo-400" />
+
+                        {/* Checklist items */}
+                        <div className="space-y-3">
+                          <h4 className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider">
+                            Poin Pemeriksaan AI
+                          </h4>
+                          <div className="space-y-2">
+                            {scanResult.checklist.map((item, idx) => (
+                              <div key={idx} className="flex items-start justify-between p-3 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-100/50 dark:border-slate-700/20 hover:border-slate-200 dark:hover:border-slate-700 transition">
+                                <div className="flex items-start gap-2.5 min-w-0">
+                                  {item.status === 'PASS' ? (
+                                    <div className="mt-0.5 p-0.5 bg-green-100 dark:bg-green-950/60 text-green-600 dark:text-green-400 rounded-full shrink-0">
+                                      <Check size={10} />
+                                    </div>
+                                  ) : (
+                                    <div className="mt-0.5 p-0.5 bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 rounded-full shrink-0">
+                                      <AlertTriangle size={10} />
+                                    </div>
+                                  )}
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-black text-slate-700 dark:text-slate-300 leading-tight">
+                                      {item.label}
+                                    </p>
+                                    <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold mt-0.5">
+                                      {item.details}
+                                    </p>
+                                  </div>
+                                </div>
+                                <span className={`text-[9px] font-black uppercase tracking-widest shrink-0 ${item.status === 'PASS' ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                                  {item.status}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* AI Recommendation Box */}
+                        <div className="bg-orange-50/50 dark:bg-slate-900/40 p-4 rounded-2xl border border-orange-100/50 dark:border-slate-700/50">
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <Sparkles size={14} className="text-orange-500 animate-pulse" />
+                            <h4 className="text-[10px] font-black uppercase text-orange-600 dark:text-orange-400 tracking-wider">
+                              Analisis & Rekomendasi AI
+                            </h4>
+                          </div>
+                          <p className="text-xs text-slate-600 dark:text-slate-300 font-medium leading-relaxed italic">
+                            "{scanResult.recommendation}"
+                          </p>
+                        </div>
+
+                        {/* Interactive action controls */}
+                        <div className="flex flex-wrap gap-2.5 pt-2">
+                          <button
+                            onClick={() => {
+                              setToastMessage(`Dokumen ${selectedScanDoc.doc} disetujui secara manual.`);
+                              const updatedChecklist = scanResult.checklist.map(c => ({
+                                ...c,
+                                status: 'PASS',
+                                details: c.status === 'WARNING' ? 'Disetujui manual oleh petugas' : c.details
+                              }));
+                              setScanResult({
+                                ...scanResult,
+                                status: 'Valid',
+                                risk: 'Low Risk',
+                                riskColor: 'text-green-600 bg-green-50 dark:bg-green-950/40 dark:text-green-400 border border-green-200 dark:border-green-900',
+                                checklist: updatedChecklist
+                              });
+                            }}
+                            className="flex-1 min-w-[120px] py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition flex items-center justify-center gap-2 shadow-md shadow-emerald-950/10 active:scale-98"
+                          >
+                            <Check size={14} /> Setujui
+                          </button>
+                          <button
+                            onClick={() => {
+                              setToastMessage(`Dokumen ${selectedScanDoc.doc} ditandai untuk eskalasi review.`);
+                              setScanResult({
+                                ...scanResult,
+                                status: 'Flagged',
+                                risk: 'High Risk',
+                                riskColor: 'text-red-600 bg-red-50 dark:bg-red-950/40 dark:text-red-400 border border-red-200 dark:border-red-900'
+                              });
+                            }}
+                            className="flex-1 min-w-[120px] py-3 px-4 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-black uppercase tracking-widest transition flex items-center justify-center gap-2 shadow-md shadow-amber-950/10 active:scale-98"
+                          >
+                            <ShieldAlert size={14} /> Eskalasi Review
+                          </button>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(selectedScanDoc.cif);
+                              setToastMessage(`Nomor CIF ${selectedScanDoc.cif} berhasil disalin!`);
+                            }}
+                            className="p-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl transition flex items-center justify-center shadow-sm active:scale-95"
+                            title="Salin Nomor CIF"
+                          >
+                            <Copy size={14} />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setToastMessage(`Mengunduh berkas ${selectedScanDoc.doc}...`);
+                            }}
+                            className="p-3 bg-indigo-50 hover:bg-indigo-100 dark:bg-slate-900 dark:hover:bg-slate-900/50 text-indigo-600 dark:text-indigo-400 rounded-xl transition flex items-center justify-center border border-indigo-100 dark:border-slate-700 shadow-sm active:scale-95"
+                            title="Unduh Berkas"
+                          >
+                            <Download size={14} />
+                          </button>
                         </div>
                       </div>
-                    )) : (
-                      <div className="py-24 text-center">
-                        <div className="w-20 h-20 bg-slate-50 dark:bg-slate-700/30 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-100 dark:border-slate-700">
-                          <Database size={32} className="text-slate-200 dark:text-slate-600" />
+                    ) : (
+                      <div className="bg-white dark:bg-slate-800 p-8 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-sm flex flex-col items-center justify-center min-h-[350px] text-center transition-all duration-300">
+                        <div className="w-14 h-14 bg-indigo-50 dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 rounded-2xl flex items-center justify-center mb-4 border border-indigo-100 dark:border-slate-700">
+                          <Database size={24} className="animate-pulse" />
                         </div>
-                        <p className="text-slate-300 dark:text-slate-500 font-black text-xs uppercase tracking-[0.2em] px-4">Silakan masukkan kueri pencarian arsip</p>
+                        <h4 className="text-slate-800 dark:text-slate-300 font-black text-xs uppercase tracking-[0.2em]">Menunggu Seleksi Dokumen</h4>
+                        <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-2 font-medium max-w-xs mx-auto">
+                          Klik salah satu dokumen hasil pencarian di panel kiri untuk menjalankan AI Scan Engine dan memverifikasi data berkas.
+                        </p>
                       </div>
                     )}
                   </div>
@@ -2027,6 +2394,148 @@ const App = () => {
             </div>
 
           </div>
+        </div>
+      )}
+
+      {/* Modal Tambah Dokumen Nasabah */}
+      {isAddDocOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl max-w-md w-full shadow-2xl border border-slate-100 dark:border-slate-700 overflow-hidden animate-in zoom-in-95 duration-300">
+            {/* Header */}
+            <div className="p-6 border-b border-slate-100 dark:border-slate-700/50 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/20">
+              <h3 className="text-sm font-black uppercase text-indigo-950 dark:text-white tracking-wider flex items-center gap-2">
+                <Plus className="text-indigo-600 dark:text-indigo-400" size={18} /> Tambah Dokumen Nasabah
+              </h3>
+              <button 
+                onClick={() => setIsAddDocOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            
+            {/* Form */}
+            <form onSubmit={handleAddCustomerDoc} className="p-6 space-y-4">
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5">Nama Nasabah</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Masukkan nama lengkap nasabah"
+                  className="w-full bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-semibold outline-none focus:border-indigo-500 transition"
+                  value={addDocName}
+                  onChange={e => setAddDocName(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5">Nomor CIF</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Contoh: CIF99201"
+                  className="w-full bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-semibold outline-none focus:border-indigo-500 transition"
+                  value={addDocCif}
+                  onChange={e => setAddDocCif(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5">Berkas Dokumen</label>
+                <div className="flex flex-col gap-2">
+                  {addDocFilename ? (
+                    <div className="flex items-center justify-between p-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <FileText className="text-indigo-600 dark:text-indigo-400 shrink-0" size={18} />
+                        <div className="min-w-0">
+                          <p className="text-xs font-black text-slate-700 dark:text-slate-200 truncate">{addDocFilename}</p>
+                          <p className="text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase">{addDocSize}</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAddDocFilename('');
+                          setAddDocSize('');
+                        }}
+                        className="text-red-500 hover:text-red-700 p-1.5 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center border border-dashed border-slate-250 dark:border-slate-700 rounded-2xl p-5 hover:border-indigo-400 dark:hover:border-indigo-500 cursor-pointer group transition bg-slate-50/50 dark:bg-slate-900/10">
+                      <Upload className="text-slate-450 group-hover:text-indigo-500 dark:group-hover:text-indigo-400 mb-2 transition" size={24} />
+                      <p className="text-xs font-black text-slate-750 dark:text-slate-300">Pilih Berkas Dokumen</p>
+                      <p className="text-[9px] text-slate-400 dark:text-slate-500 font-bold mt-1 uppercase">PDF, PNG, JPG (Maks 10MB)</p>
+                      <input
+                        type="file"
+                        className="hidden"
+                        onChange={handleCustomerFileChange}
+                        accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                      />
+                    </label>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5">Kategori Dokumen</label>
+                <select
+                  className="w-full bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-semibold outline-none focus:border-indigo-500 transition"
+                  value={addDocCategory}
+                  onChange={e => setAddDocCategory(e.target.value)}
+                >
+                  <option value="Identitas">Identitas</option>
+                  <option value="Agunan">Agunan</option>
+                  <option value="Administrasi">Administrasi</option>
+                  <option value="Finansial">Finansial</option>
+                  <option value="Lainnya">Lainnya (Kustom...)</option>
+                </select>
+              </div>
+
+              {addDocCategory === 'Lainnya' && (
+                <div className="animate-in slide-in-from-top-2 duration-350">
+                  <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5">Nama Kategori Kustom</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Contoh: Dokumen Hukum, Pajak, Sertifikasi"
+                    className="w-full bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-semibold outline-none focus:border-indigo-500 transition"
+                    value={addDocCustomCategory}
+                    onChange={e => setAddDocCustomCategory(e.target.value)}
+                  />
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAddDocOpen(false)}
+                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-black uppercase tracking-widest transition"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition shadow-md shadow-indigo-950/10 active:scale-98"
+                >
+                  Simpan Berkas
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-5 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 border border-slate-800 animate-in slide-in-from-bottom-5">
+          <div className="p-1 bg-green-500/20 text-green-400 rounded-lg">
+            <Check size={16} />
+          </div>
+          <span className="text-xs sm:text-sm font-black tracking-wide">{toastMessage}</span>
         </div>
       )}
 
