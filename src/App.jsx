@@ -216,14 +216,37 @@ const App = () => {
     }, 1500);
   };
 
-  const handleEcmSummarize = (doc) => {
+  const handleEcmSummarize = async (doc) => {
     setSelectedDoc(doc);
     setIsSummarizing(true);
     setAiSummary('');
-    setTimeout(() => {
-      setAiSummary(`Berdasarkan analisis AI terhadap dokumen "${doc.title}", poin pentingnya adalah: (1) Suku bunga KPR disesuaikan menjadi 5.5% fixed 3 tahun, (2) Semua kelengkapan dokumen jaminan/agunan wajib diverifikasi keasliannya oleh tim hukum, (3) Proses SLA pemrosesan dipercepat hingga maksimal 3 hari kerja.`);
+    
+    try {
+      const response = await fetch('http://localhost:5000/api/summarize', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          documentTitle: doc.title,
+          documentType: doc.type
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Gagal memanggil backend');
+      }
+
+      const data = await response.json();
+      setAiSummary(data.summary);
       setIsSummarizing(false);
-    }, 2000);
+    } catch (error) {
+      console.warn('Backend server offline or Gemini API error. Using mockup fallback.', error);
+      setTimeout(() => {
+        setAiSummary(`[Simulasi AI - Backend Offline/API Key Kosong]\nBerdasarkan analisis AI terhadap dokumen "${doc.title}", poin pentingnya adalah:\n1. Suku bunga KPR disesuaikan menjadi 5.5% fixed 3 tahun.\n2. Semua kelengkapan dokumen jaminan/agunan wajib diverifikasi keasliannya oleh tim hukum.\n3. Proses SLA pemrosesan dipercepat hingga maksimal 3 hari kerja.`);
+        setIsSummarizing(false);
+      }, 1500);
+    }
   };
 
   const handleArchiveSearch = () => {
@@ -244,12 +267,37 @@ const App = () => {
     }, 1500);
   };
 
-  const handleCrmAssist = () => {
+  const handleCrmAssist = async () => {
     setIsCrmGenerating(true);
-    setTimeout(() => {
-      setCrmResponse("Halo Bapak Andi Setiawan, terima kasih telah menghubungi Bank Panin. Berdasarkan pengecekan sistem kami terhadap dokumen KPR Anda di ECM, permohonan Anda sudah dalam tahap verifikasi agunan. Promo bunga 5.5% tetap berlaku untuk Anda. Apakah ada dokumen lain yang ingin Anda tanyakan?");
+    setCrmResponse('');
+
+    try {
+      const response = await fetch('http://localhost:5000/api/crm-chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          customerName: 'Andi Setiawan',
+          customerCif: 'CIF99201',
+          customerMessage: 'Selamat siang, saya mau tanya syarat pengajuan KPR apa saja ya? Dan apakah sertifikat SHM yang saya kirim kemarin sudah terverifikasi di sistem?'
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Gagal memanggil backend');
+      }
+
+      const data = await response.json();
+      setCrmResponse(data.response);
       setIsCrmGenerating(false);
-    }, 2000);
+    } catch (error) {
+      console.warn('Backend server offline or Gemini API error. Using mockup fallback.', error);
+      setTimeout(() => {
+        setCrmResponse("[Simulasi AI - Backend Offline/API Key Kosong]\nHalo Bapak Andi Setiawan, terima kasih telah menghubungi Bank Panin. Berdasarkan pengecekan sistem kami terhadap dokumen KPR Anda di ECM, permohonan Anda sudah dalam tahap verifikasi agunan. Promo bunga 5.5% tetap berlaku untuk Anda. Apakah ada dokumen lain yang ingin Anda tanyakan?");
+        setIsCrmGenerating(false);
+      }, 1500);
+    }
   };
 
   // --- HELPERS & HANDLERS FOR EXCEL IMPORT & AUTO-CLEANING ---
