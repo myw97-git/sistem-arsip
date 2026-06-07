@@ -222,7 +222,7 @@ const App = () => {
     setAiSummary('');
     
     try {
-      const response = await fetch('http://localhost:5000/api/summarize', {
+      const response = await fetch('http://127.0.0.1:5000/api/summarize', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -272,7 +272,7 @@ const App = () => {
     setCrmResponse('');
 
     try {
-      const response = await fetch('http://localhost:5000/api/crm-chat', {
+      const response = await fetch('http://127.0.0.1:5000/api/crm-chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
