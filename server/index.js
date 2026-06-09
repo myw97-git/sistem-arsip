@@ -168,6 +168,45 @@ app.post('/api/auth/forgot-password', async (req, res) => {
   }
 });
 
+// --- ENDPOINT: UPDATE PROFIL KARYAWAN ---
+app.post('/api/auth/update-profile', async (req, res) => {
+  const { employeeId, fullName, password, avatar } = req.body;
+
+  if (!employeeId) {
+    return res.status(400).json({ error: 'ID Karyawan wajib disertakan.' });
+  }
+
+  try {
+    const users = await readUsersDb();
+    const userIndex = users.findIndex(u => u.employeeId.toUpperCase() === employeeId.trim().toUpperCase());
+
+    if (userIndex === -1) {
+      return res.status(404).json({ error: 'Karyawan tidak ditemukan.' });
+    }
+
+    // Update data jika dikirimkan
+    if (fullName) users[userIndex].fullName = fullName.trim();
+    if (password) users[userIndex].password = password;
+    if (avatar !== undefined) users[userIndex].avatar = avatar; // Base64 string foto
+
+    await writeUsersDb(users);
+
+    return res.json({
+      message: 'Profil berhasil diperbarui!',
+      user: {
+        employeeId: users[userIndex].employeeId,
+        fullName: users[userIndex].fullName,
+        email: users[userIndex].email,
+        avatar: users[userIndex].avatar || null
+      }
+    });
+  } catch (error) {
+    console.error('Update Profile Error:', error);
+    return res.status(500).json({ error: 'Terjadi kesalahan internal saat memperbarui profil.' });
+  }
+});
+
+
 // Helper to check if API key is configured
 const getApiKey = () => {
   const key = process.env.GEMINI_API_KEY;

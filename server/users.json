@@ -22,5 +22,11 @@
     "fullName": "maulana",
     "email": "maulana@panin.ac.id",
     "password": "123"
+  },
+  {
+    "employeeId": "admin",
+    "fullName": "Administrator",
+    "email": "admin@panin.ac.id",
+    "password": "admin123"
   }
 ]

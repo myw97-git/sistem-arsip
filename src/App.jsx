@@ -214,6 +214,15 @@ const App = () => {
   const [classSearchQuery, setClassSearchQuery] = useState('');
   const [isClassDropdownOpen, setIsClassDropdownOpen] = useState(false);
 
+  // --- STATE SETTING PROFIL ---
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [profileName, setProfileName] = useState('');
+  const [profilePassword, setProfilePassword] = useState('');
+  const [profileAvatar, setProfileAvatar] = useState('');
+  const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
+  const [profileError, setProfileError] = useState('');
+  const [profileSuccess, setProfileSuccess] = useState('');
+
   // --- STATE SMART ECM ---
   const [ecmSearch, setEcmSearch] = useState('');
   const [selectedDoc, setSelectedDoc] = useState(null);
@@ -445,6 +454,48 @@ const App = () => {
       setForgotError(error.message);
     } finally {
       setIsSendingForgot(false);
+    }
+  };
+
+  const handleUpdateProfile = async (e) => {
+    e.preventDefault();
+    if (!profileName.trim()) {
+      return setProfileError('Nama Lengkap tidak boleh kosong.');
+    }
+    
+    setIsUpdatingProfile(true);
+    setProfileError('');
+    setProfileSuccess('');
+
+    try {
+      const response = await fetch('http://127.0.0.1:5005/api/auth/update-profile', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          employeeId: currentUser.employeeId,
+          fullName: profileName.trim(),
+          password: profilePassword ? profilePassword : undefined,
+          avatar: profileAvatar
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Gagal memperbarui profil.');
+      }
+
+      setCurrentUser(data.user);
+      setProfileSuccess(data.message);
+      setToastMessage('Profil Karyawan berhasil diperbarui!');
+      setTimeout(() => {
+        setIsProfileOpen(false);
+      }, 1500);
+    } catch (error) {
+      setProfileError(error.message);
+    } finally {
+      setIsUpdatingProfile(false);
     }
   };
 
@@ -1668,11 +1719,26 @@ const App = () => {
                 <Moon size={isHeaderScrolled ? 14 : 18} className="text-indigo-600 transition-all duration-300" />
               )}
             </button>
-            <div className={`bg-indigo-100 dark:bg-slate-700 rounded-xl flex items-center justify-center text-indigo-700 dark:text-indigo-400 font-black shadow-inner transition-all duration-300 ${
-              isHeaderScrolled ? 'w-8 h-8' : 'w-10 h-10'
-            }`}>
-              <User size={isHeaderScrolled ? 16 : 20} className="transition-all duration-300" />
-            </div>
+             <button
+              onClick={() => {
+                setProfileName(currentUser?.fullName || '');
+                setProfilePassword('');
+                setProfileAvatar(currentUser?.avatar || '');
+                setProfileError('');
+                setProfileSuccess('');
+                setIsProfileOpen(true);
+              }}
+              className={`bg-indigo-100 dark:bg-slate-700 rounded-xl flex items-center justify-center text-indigo-700 dark:text-indigo-400 font-black shadow-inner transition-all duration-300 cursor-pointer hover:scale-105 active:scale-95 hover:bg-indigo-200 dark:hover:bg-slate-600 border border-slate-200/20 dark:border-slate-700 outline-none overflow-hidden ${
+                isHeaderScrolled ? 'w-8 h-8' : 'w-10 h-10'
+              }`}
+              title="Profil Karyawan"
+            >
+              {currentUser?.avatar ? (
+                <img src={currentUser.avatar} alt="Foto Profil" className="w-full h-full object-cover" />
+              ) : (
+                <User size={isHeaderScrolled ? 16 : 20} className="transition-all duration-300" />
+              )}
+            </button>
           </div>
         </header>
 
@@ -3363,6 +3429,141 @@ const App = () => {
                   className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition shadow-md shadow-indigo-950/10 active:scale-98"
                 >
                   Simpan Berkas
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Pengaturan Profil Karyawan */}
+      {isProfileOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl max-w-md w-full shadow-2xl border border-slate-100 dark:border-slate-700 overflow-hidden animate-in zoom-in-95 duration-300">
+            {/* Header */}
+            <div className="p-6 border-b border-slate-100 dark:border-slate-700/50 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/20">
+              <h3 className="text-sm font-black uppercase text-indigo-950 dark:text-white tracking-wider flex items-center gap-2">
+                <User className="text-indigo-600 dark:text-indigo-400" size={18} /> Profil Karyawan
+              </h3>
+              <button 
+                onClick={() => setIsProfileOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            
+            {/* Form */}
+            <form onSubmit={handleUpdateProfile} className="p-6 space-y-4">
+              
+              {/* Avatar Selector */}
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-24 h-24 bg-indigo-50 dark:bg-slate-700 border-2 border-indigo-100 dark:border-slate-600 rounded-2xl overflow-hidden flex items-center justify-center relative shadow-inner group">
+                  {profileAvatar ? (
+                    <img src={profileAvatar} alt="Foto Profil" className="w-full h-full object-cover" />
+                  ) : (
+                    <User size={36} className="text-indigo-300 dark:text-slate-500" />
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <label className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-700 dark:hover:bg-slate-650 border border-slate-200 dark:border-slate-600 rounded-xl text-[10px] font-black uppercase tracking-wider text-slate-600 dark:text-slate-300 cursor-pointer flex items-center gap-1">
+                    <Upload size={12} /> Unggah Foto
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      className="hidden" 
+                      onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            setProfileAvatar(reader.result);
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                  </label>
+                  {profileAvatar && (
+                    <button
+                      type="button"
+                      onClick={() => setProfileAvatar('')}
+                      className="px-3 py-1.5 bg-red-50 hover:bg-red-100 dark:bg-red-950/20 text-red-600 dark:text-red-400 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1"
+                    >
+                      <Trash2 size={12} /> Hapus
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5">ID Karyawan</label>
+                <div className="flex items-center bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-semibold text-slate-500 cursor-not-allowed">
+                  <Lock size={14} className="mr-2 text-slate-400" />
+                  {currentUser?.employeeId}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5">Email Perusahaan</label>
+                <div className="flex items-center bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-semibold text-slate-500 cursor-not-allowed">
+                  <Lock size={14} className="mr-2 text-slate-400" />
+                  {currentUser?.email}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5">Nama Lengkap *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Masukkan Nama Lengkap"
+                  className="w-full bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-semibold outline-none focus:border-indigo-500 transition"
+                  value={profileName}
+                  onChange={e => setProfileName(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5">Kata Sandi Baru (Opsional)</label>
+                <input
+                  type="password"
+                  placeholder="Kosongkan jika tidak ingin diganti"
+                  className="w-full bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-semibold outline-none focus:border-indigo-500 transition"
+                  value={profilePassword}
+                  onChange={e => setProfilePassword(e.target.value)}
+                />
+              </div>
+
+              {profileError && (
+                <div className="p-3 bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/50 rounded-xl flex items-center gap-2 text-red-600 dark:text-red-400 text-xs font-semibold">
+                  <ShieldAlert size={16} className="shrink-0" />
+                  <span>{profileError}</span>
+                </div>
+              )}
+
+              {profileSuccess && (
+                <div className="p-3 bg-green-50 dark:bg-green-950/30 border border-green-100 dark:border-green-900/50 rounded-xl flex items-center gap-2 text-green-600 dark:text-green-400 text-xs font-semibold">
+                  <CheckCircle2 size={16} className="shrink-0" />
+                  <span>{profileSuccess}</span>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsProfileOpen(false)}
+                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-black uppercase tracking-widest transition"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdatingProfile}
+                  className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition shadow-md shadow-indigo-950/10 active:scale-98 disabled:opacity-50 flex items-center justify-center gap-1"
+                >
+                  {isUpdatingProfile ? <Loader2 className="animate-spin" size={14} /> : 'Simpan'}
                 </button>
               </div>
             </form>
