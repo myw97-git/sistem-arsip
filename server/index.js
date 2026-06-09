@@ -157,6 +157,103 @@ Aturan Balasan:
   }
 });
 
+// --- ENDPOINT: AUTOMATED ARCHIVE CLASSIFICATION & LABELING ---
+app.post('/api/classify', async (req, res) => {
+  const { documentTitle } = req.body;
+
+  if (!documentTitle) {
+    return res.status(400).json({ error: 'Judul dokumen wajib dicantumkan untuk klasifikasi.' });
+  }
+
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    return res.status(500).json({ 
+      error: 'GEMINI_API_KEY belum dikonfigurasi di file .env server backend.' 
+    });
+  }
+
+  const prompt = `Anda adalah asisten klasifikasi arsip perbankan otomatis untuk Panin Bank Kantor Cabang Bandung.
+Tugas Anda adalah memprediksi kode klasifikasi arsip, nama klasifikasi/judul resmi yang sesuai, dan JRA (Jadwal Retensi Arsip) dalam tahun (sebagai angka bulat) berdasarkan judul dokumen yang diberikan.
+
+Berikut adalah daftar acuan klasifikasi resmi kami:
+1. AK 99.01 - Laporan Neraca (JRA: 5 tahun)
+2. JB 99.04 - Translog (JRA: 10 tahun)
+3. JB 99.01 - Maintenance Report (JRA: 5 tahun)
+4. JB 99.16 - Laporan Deposito (JRA: 5 tahun)
+5. JB 99.12 - Daftar Suku Bunga Deposito (JRA: 5 tahun)
+6. TR 99.01 - Bloter Valas (JRA: 5 tahun)
+7. JB 99.13 - Daftar Hitam Nasabah (JRA: 5 tahun)
+8. TR 11.02 - Receipt Form (JRA: 5 tahun)
+9. JB 99.07 - Laporan Pengisian ATM (JRA: 5 tahun)
+10. JB 99.08 - SKN (JRA: 5 tahun)
+11. JB 99.08 - RTGS (JRA: 5 tahun)
+12. JB 10.01 - Kliring (JRA: 5 tahun)
+13. JB 12.00 - Payment Point (JRA: 5 tahun)
+14. JB 20.02 - ATM (JRA: 5 tahun)
+15. JB 20.02 - LOG PENGGUNAAN KUNCI ATM (JRA: 5 tahun)
+16. JB 10.14 - TITIPAN PINBUK (JRA: 5 tahun)
+17. JB 10.14 - TITIPAN KLIRING (JRA: 5 tahun)
+18. JB 10.14 - KLIRING (JRA: 5 tahun)
+19. AK 03.01 - TESKEY (JRA: 5 tahun)
+20. AK 03.01 - SKN (JRA: 5 tahun)
+21. AK 03.01 - BI FAST (JRA: 5 tahun)
+
+Jika judul dokumen sangat mirip dengan salah satu daftar di atas, gunakan kode klasifikasi tersebut. Jika tidak cocok sama sekali, tentukan kode klasifikasi baru yang relevan dengan format 2 huruf + spasi + 2 angka + . + 2 angka (contoh: 'JB 99.99' atau 'AK 01.02') dan berikan perkiraan JRA yang masuk akal antara 5 sampai 10 tahun berdasarkan pentingnya dokumen bagi perbankan.
+
+Judul Dokumen yang diinput oleh user: "${documentTitle}"
+
+Berikan output dalam format JSON mentah tanpa format markdown (no code blocks), dengan kunci berikut:
+{
+  "classificationCode": "Kode klasifikasi, contoh 'JB 99.04'",
+  "jra": 10,
+  "title": "Nama klasifikasi atau judul resmi dokumen yang bersih dan rapi, contoh 'Translog'"
+}
+
+Pastikan output HANYA berupa objek JSON yang valid dan tidak ada teks lain sebelum atau sesudahnya agar bisa diparse langsung.`;
+
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{ text: prompt }]
+          }]
+        })
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Gemini API Error:', errorData);
+      return res.status(response.status).json({ 
+        error: 'Gagal memproses klasifikasi dokumen dengan Gemini API.', 
+        details: errorData 
+      });
+    }
+
+    const data = await response.json();
+    let generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    
+    // Pembersihan block markdown jika ada
+    let cleanedText = generatedText.trim();
+    if (cleanedText.startsWith('```')) {
+      cleanedText = cleanedText.replace(/^```json\s*/i, '').replace(/```$/, '').trim();
+    }
+
+    const parsedJson = JSON.parse(cleanedText);
+    return res.json(parsedJson);
+  } catch (error) {
+    console.error('Server Error:', error);
+    return res.status(500).json({ error: 'Terjadi kesalahan internal pada server saat klasifikasi.', details: error.message });
+  }
+});
+
 // Start listening
 app.listen(PORT, () => {
   console.log(`========================================================`);
