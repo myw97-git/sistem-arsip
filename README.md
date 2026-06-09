@@ -86,3 +86,65 @@ sistem-arsip/
 ├── eslint.config.js       # Konfigurasi Linter kualitas kode
 ├── package.json           # Dependensi project & script automation
 └── vite.config.js         # Konfigurasi bundler Vite, React, dan Tailwind plugin
+
+---
+
+## 🏃‍♂️ Panduan Menjalankan Proyek (Untuk Demo & Pengujian)
+
+Untuk mempermudah presentasi atau menjalankan program di perangkat lain, silakan ikuti petunjuk berikut:
+
+### 1. Prasyarat Sistem
+Pastikan perangkat Anda sudah menginstal:
+* **Node.js (LTS Version):** Bisa diunduh di [nodejs.org](https://nodejs.org/).
+* **Git:** (Opsional) Untuk mempermudah unduhan kode repositori.
+
+---
+
+### 2. Langkah Setup Pertama Kali
+
+#### **Langkah A: Clone / Unduh Repositori**
+```bash
+git clone https://github.com/myw97-git/sistem-arsip.git
+cd sistem-arsip
+```
+*(Jika program sudah ada di komputer tujuan, cukup jalankan `git pull origin main` untuk mengambil versi terbaru).*
+
+#### **Langkah B: Setup Frontend (React + Vite)**
+1. Di terminal utama (folder root `/`), instal paket dependensi:
+   ```bash
+   npm install
+   ```
+2. Jalankan server pengembangan frontend:
+   ```bash
+   npm run dev
+   ```
+   *Frontend akan berjalan di alamat `http://localhost:5173/`.*
+
+#### **Langkah C: Setup Backend (Express.js)**
+1. Buka terminal baru dan masuk ke folder `server/`:
+   ```bash
+   cd server
+   ```
+2. Instal paket dependensi backend:
+   ```bash
+   npm install
+   ```
+3. Buat berkas baru bernama **`.env`** di dalam folder `server/`, lalu tambahkan API Key Gemini Anda:
+   ```env
+   GEMINI_API_KEY=MASUKKAN_API_KEY_GEMINI_ANDA
+   PORT=5005
+   ```
+   *(Dapatkan API Key Gemini secara gratis di [Google AI Studio](https://aistudio.google.com/)).*
+4. Jalankan server backend:
+   ```bash
+   npm start
+   ```
+   *Backend akan berjalan di port `5005`.*
+
+---
+
+### 🔑 Kredensial Akun untuk Demo Cepat
+Agar presentasi berjalan lancar tanpa perlu registrasi akun baru terlebih dahulu, gunakan akun bawaan yang terdaftar di database `server/users.json`:
+* **ID Karyawan:** `KRY-09228`
+* **Kata Sandi:** `password123`
+*(Akun ini atas nama **Maulana Yusup Wijaya**, yang akan langsung tercetak secara dinamis di header setelah login).*
