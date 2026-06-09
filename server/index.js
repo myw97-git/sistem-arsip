@@ -1,9 +1,38 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import fs from 'fs/promises';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 // Load environment variables
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const USERS_FILE_PATH = path.join(__dirname, 'users.json');
+
+// Helper to read users from database
+const readUsersDb = async () => {
+  try {
+    const data = await fs.readFile(USERS_FILE_PATH, 'utf-8');
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('Error reading users database, returning empty list:', error);
+    return [];
+  }
+};
+
+// Helper to write users to database
+const writeUsersDb = async (users) => {
+  try {
+    await fs.writeFile(USERS_FILE_PATH, JSON.stringify(users, null, 2), 'utf-8');
+    return true;
+  } catch (error) {
+    console.error('Error writing to users database:', error);
+    return false;
+  }
+};
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -23,6 +52,121 @@ app.use(cors({
 
 // Parse JSON request bodies
 app.use(express.json());
+
+// --- ENDPOINT: REGISTER AKUN KARYAWAN ---
+app.post('/api/auth/register', async (req, res) => {
+  const { employeeId, fullName, email, password } = req.body;
+
+  if (!employeeId || !fullName || !email || !password) {
+    return res.status(400).json({ error: 'Semua kolom registrasi wajib diisi.' });
+  }
+
+  const empIdClean = employeeId.trim().toUpperCase();
+  const emailClean = email.trim().toLowerCase();
+
+  // Validasi format email sederhana
+  if (!emailClean.includes('@') || !emailClean.includes('.')) {
+    return res.status(400).json({ error: 'Format email tidak valid. Gunakan email perusahaan Anda.' });
+  }
+
+  try {
+    const users = await readUsersDb();
+
+    // Cek apakah user sudah terdaftar
+    const existingUser = users.find(u => u.employeeId.toUpperCase() === empIdClean || u.email.toLowerCase() === emailClean);
+    if (existingUser) {
+      return res.status(400).json({ error: 'ID Karyawan atau Email sudah terdaftar di sistem kearsipan.' });
+    }
+
+    // Tambahkan user baru
+    const newUser = {
+      employeeId: empIdClean,
+      fullName: fullName.trim(),
+      email: emailClean,
+      password: password // Plain text untuk kemudahan simulasi tugas KP
+    };
+
+    users.push(newUser);
+    await writeUsersDb(users);
+
+    return res.json({ 
+      message: 'Registrasi karyawan berhasil! Silakan masuk ke portal.',
+      user: {
+        employeeId: newUser.employeeId,
+        fullName: newUser.fullName,
+        email: newUser.email
+      }
+    });
+  } catch (error) {
+    console.error('Registration Error:', error);
+    return res.status(500).json({ error: 'Terjadi kesalahan internal saat mendaftarkan akun.' });
+  }
+});
+
+// --- ENDPOINT: LOGIN AKUN KARYAWAN ---
+app.post('/api/auth/login', async (req, res) => {
+  const { employeeId, password } = req.body;
+
+  if (!employeeId || !password) {
+    return res.status(400).json({ error: 'ID Karyawan dan kata sandi wajib diisi.' });
+  }
+
+  const empIdClean = employeeId.trim().toUpperCase();
+
+  try {
+    const users = await readUsersDb();
+    const user = users.find(u => u.employeeId.toUpperCase() === empIdClean && u.password === password);
+
+    if (!user) {
+      return res.status(401).json({ error: 'ID Karyawan atau kata sandi tidak cocok. Pastikan Anda sudah mendaftar.' });
+    }
+
+    return res.json({
+      message: 'Login berhasil!',
+      user: {
+        employeeId: user.employeeId,
+        fullName: user.fullName,
+        email: user.email
+      }
+    });
+  } catch (error) {
+    console.error('Login Error:', error);
+    return res.status(500).json({ error: 'Terjadi kesalahan internal saat login.' });
+  }
+});
+
+// --- ENDPOINT: LUPA PASSWORD ---
+app.post('/api/auth/forgot-password', async (req, res) => {
+  const { employeeIdOrEmail } = req.body;
+
+  if (!employeeIdOrEmail) {
+    return res.status(400).json({ error: 'ID Karyawan atau Email perusahaan wajib diisi.' });
+  }
+
+  const searchInput = employeeIdOrEmail.trim().toLowerCase();
+
+  try {
+    const users = await readUsersDb();
+    const user = users.find(u => 
+      u.employeeId.toLowerCase() === searchInput || 
+      u.email.toLowerCase() === searchInput
+    );
+
+    if (!user) {
+      return res.status(404).json({ error: 'ID Karyawan atau email tersebut tidak terdaftar di sistem perusahaan.' });
+    }
+
+    // Simulasi pengiriman email
+    console.log(`[EMAIL SIMULATION] Sending password recovery link to ${user.email} (User: ${user.fullName})`);
+
+    return res.json({
+      message: `Tautan pemulihan kata sandi telah dikirimkan ke email terdaftar Anda (${user.email}). Silakan periksa kotak masuk/spam email perusahaan Anda.`
+    });
+  } catch (error) {
+    console.error('Forgot Password Error:', error);
+    return res.status(500).json({ error: 'Terjadi kesalahan internal saat memproses pemulihan kata sandi.' });
+  }
+});
 
 // Helper to check if API key is configured
 const getApiKey = () => {

@@ -1,0 +1,26 @@
+[
+  {
+    "employeeId": "KRY-09228",
+    "fullName": "Maulana Yusup Wijaya",
+    "email": "maulana@panin.co.id",
+    "password": "password123"
+  },
+  {
+    "employeeId": "KRY-01001",
+    "fullName": "Budi Santoso",
+    "email": "budi.santoso@panin.co.id",
+    "password": "password123"
+  },
+  {
+    "employeeId": "KRY-12345",
+    "fullName": "Agus Pratama",
+    "email": "agus@panin.co.id",
+    "password": "passwordAgus"
+  },
+  {
+    "employeeId": "123",
+    "fullName": "maulana",
+    "email": "maulana@panin.ac.id",
+    "password": "123"
+  }
+]

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   Search, FileText, Send, Sparkles, MessageSquare, Clock,
-  User, Layout, ChevronRight, Loader2, Database, Info, Filter,
+  User, Layout, ChevronRight, Loader2, Database, Info, Filter, Mail,
   Download, BarChart3, CheckCircle2, Lock,
   Eye, EyeOff, Paperclip, Sun, Moon, Menu, X, Plus, Trash2, Printer, ArrowLeft,
   Upload, Edit2, RotateCcw, Copy, Check, AlertTriangle, ShieldAlert
@@ -126,12 +126,40 @@ const App = () => {
   }, []);
 
   // --- STATE AUTH ---
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('current_user'));
   const [employeeId, setEmployeeId] = useState('');
   const [password, setPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState('');
+
+  // --- STATE BARU AUTH (REGISTER & LUPA PASSWORD) ---
+  const [authMode, setAuthMode] = useState('login'); // 'login', 'register', 'forgot'
+  const [regEmployeeId, setRegEmployeeId] = useState('');
+  const [regFullName, setRegFullName] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [regError, setRegError] = useState('');
+  const [regSuccess, setRegSuccess] = useState('');
+
+  const [forgotInput, setForgotInput] = useState('');
+  const [isSendingForgot, setIsSendingForgot] = useState(false);
+  const [forgotError, setForgotError] = useState('');
+  const [forgotSuccess, setForgotSuccess] = useState('');
+
+  const [currentUser, setCurrentUser] = useState(() => {
+    const saved = localStorage.getItem('current_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem('current_user', JSON.stringify(currentUser));
+    } else {
+      localStorage.removeItem('current_user');
+    }
+  }, [currentUser]);
 
   // --- STATE NAVIGASI & MOBILE DRAWER ---
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -181,6 +209,8 @@ const App = () => {
   const [filterBoxNumber, setFilterBoxNumber] = useState('');
   const [searchPhysicalQuery, setSearchPhysicalQuery] = useState('');
   const [printBoxNumber, setPrintBoxNumber] = useState(null); // Menyimpan no kotak yang akan dicetak
+  const [sortField, setSortField] = useState('destructionYear');
+  const [sortOrder, setSortOrder] = useState('desc');
 
   // --- STATE SMART ECM ---
   const [ecmSearch, setEcmSearch] = useState('');
@@ -306,15 +336,114 @@ const App = () => {
     setCrmResponse('');
   };
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    if (!employeeId) return setLoginError('ID Karyawan wajib diisi.');
+    if (!employeeId || !password) {
+      return setLoginError('ID Karyawan dan kata sandi wajib diisi.');
+    }
     setIsLoggingIn(true);
     setLoginError('');
-    setTimeout(() => {
-      setIsLoggingIn(false);
+    
+    try {
+      const response = await fetch('http://127.0.0.1:5005/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ employeeId, password })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Gagal login.');
+      }
+
+      setCurrentUser(data.user);
       setIsLoggedIn(true);
-    }, 1500);
+      setToastMessage(`Selamat datang kembali, ${data.user.fullName}!`);
+    } catch (error) {
+      setLoginError(error.message);
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    if (!regEmployeeId || !regFullName || !regEmail || !regPassword) {
+      return setRegError('Harap lengkapi semua kolom pendaftaran.');
+    }
+    setIsRegistering(true);
+    setRegError('');
+    setRegSuccess('');
+
+    try {
+      const response = await fetch('http://127.0.0.1:5005/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          employeeId: regEmployeeId,
+          fullName: regFullName,
+          email: regEmail,
+          password: regPassword
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Gagal registrasi.');
+      }
+
+      setRegSuccess(data.message);
+      setRegEmployeeId('');
+      setRegFullName('');
+      setRegEmail('');
+      setRegPassword('');
+      setEmployeeId(data.user.employeeId);
+      
+      setTimeout(() => {
+        setAuthMode('login');
+        setRegSuccess('');
+      }, 3000);
+    } catch (error) {
+      setRegError(error.message);
+    } finally {
+      setIsRegistering(false);
+    }
+  };
+
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    if (!forgotInput) {
+      return setForgotError('Harap isi ID Karyawan atau Email perusahaan Anda.');
+    }
+    setIsSendingForgot(true);
+    setForgotError('');
+    setForgotSuccess('');
+
+    try {
+      const response = await fetch('http://127.0.0.1:5005/api/auth/forgot-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ employeeIdOrEmail: forgotInput })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Gagal memproses lupa password.');
+      }
+
+      setForgotSuccess(data.message);
+      setForgotInput('');
+    } catch (error) {
+      setForgotError(error.message);
+    } finally {
+      setIsSendingForgot(false);
+    }
   };
 
   const handleClassifyDocument = async (e) => {
@@ -1053,16 +1182,66 @@ const App = () => {
     return `${day}/${month}/${year}`;
   };
 
-  // Filter tabel fisik
-  const filteredPhysicalArchives = physicalArchives.filter(item => {
-    const matchBox = filterBoxNumber ? item.boxNumber === filterBoxNumber : true;
-    const matchQuery = searchPhysicalQuery ? (
-      item.title.toLowerCase().includes(searchPhysicalQuery.toLowerCase()) ||
-      item.classificationCode.toLowerCase().includes(searchPhysicalQuery.toLowerCase()) ||
-      item.boxNumber.toLowerCase().includes(searchPhysicalQuery.toLowerCase())
-    ) : true;
-    return matchBox && matchQuery;
-  });
+  // Sort handler helper
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortOrder('asc');
+    }
+  };
+
+  // Filter & Sort tabel fisik
+  const filteredPhysicalArchives = [...physicalArchives]
+    .filter(item => {
+      const matchBox = filterBoxNumber ? item.boxNumber === filterBoxNumber : true;
+      const matchQuery = searchPhysicalQuery ? (
+        item.title.toLowerCase().includes(searchPhysicalQuery.toLowerCase()) ||
+        item.classificationCode.toLowerCase().includes(searchPhysicalQuery.toLowerCase()) ||
+        item.boxNumber.toLowerCase().includes(searchPhysicalQuery.toLowerCase())
+      ) : true;
+      return matchBox && matchQuery;
+    })
+    .sort((a, b) => {
+      if (!sortField) return 0;
+
+      let valA = a[sortField];
+      let valB = b[sortField];
+
+      if (sortField === 'title' || sortField === 'classificationCode') {
+        valA = (valA || '').toLowerCase();
+        valB = (valB || '').toLowerCase();
+        return sortOrder === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+      }
+
+      if (sortField === 'boxNumber') {
+        const numA = parseInt(valA, 10);
+        const numB = parseInt(valB, 10);
+        if (!isNaN(numA) && !isNaN(numB)) {
+          return sortOrder === 'asc' ? numA - numB : numB - numA;
+        }
+        return sortOrder === 'asc' 
+          ? String(valA).localeCompare(String(valB)) 
+          : String(valB).localeCompare(String(valA));
+      }
+
+      if (sortField === 'startDate' || sortField === 'endDate') {
+        valA = valA || '';
+        valB = valB || '';
+        return sortOrder === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+      }
+
+      if (sortField === 'jra' || sortField === 'mediaNumber' || sortField === 'destructionYear') {
+        const numA = Number(valA) || 0;
+        const numB = Number(valB) || 0;
+        return sortOrder === 'asc' ? numA - numB : numB - numA;
+      }
+
+      if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+      if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
 
   // Filter ecm documents
   const filteredEcmDocuments = ecmDocuments.filter(doc =>
@@ -1122,35 +1301,203 @@ const App = () => {
             <h1 className="text-2xl font-black text-red-500 tracking-tight leading-tight uppercase">Panin <span className="text-blue-500 dark:text-blue-400">Akses</span></h1>
             <p className="text-slate-400 dark:text-slate-500 text-[10px] font-bold tracking-[0.2em] mt-1">Enterprise Service Portal</p>
           </div>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div className="relative">
-              <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-500" size={18} />
-              <input
-                type="text"
-                placeholder="ID Karyawan"
-                className="w-full bg-slate-50 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-700 rounded-xl py-4 pl-12 pr-4 text-sm focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 outline-none transition-all font-medium text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
-                value={employeeId}
-                onChange={e => setEmployeeId(e.target.value)}
-              />
-            </div>
-            <div className="relative">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-500" size={18} />
-              <input
-                type={showPassword ? "text" : "password"}
-                placeholder="Kata Sandi"
-                className="w-full bg-slate-50 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-700 rounded-xl py-4 pl-12 pr-12 text-sm focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 outline-none transition-all font-medium text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-              />
-              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition">
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+
+          {authMode === 'login' && (
+            <form onSubmit={handleLogin} className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="text-center mb-2">
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold">Silakan masuk dengan akun Karyawan Panin Bank Anda.</p>
+              </div>
+              <div className="relative">
+                <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-500" size={18} />
+                <input
+                  type="text"
+                  placeholder="ID Karyawan (cth: KRY-09228)"
+                  className="w-full bg-slate-50 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-700 rounded-xl py-4 pl-12 pr-4 text-sm focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 outline-none transition-all font-medium text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
+                  value={employeeId}
+                  onChange={e => setEmployeeId(e.target.value)}
+                />
+              </div>
+              <div className="relative">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-500" size={18} />
+                <input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Kata Sandi"
+                  className="w-full bg-slate-50 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-700 rounded-xl py-4 pl-12 pr-12 text-sm focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 outline-none transition-all font-medium text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition">
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+              
+              <div className="flex justify-between items-center text-xs px-1">
+                <button
+                  type="button"
+                  onClick={() => { setAuthMode('forgot'); setForgotError(''); setForgotSuccess(''); setForgotInput(''); }}
+                  className="text-indigo-600 dark:text-indigo-400 hover:underline font-bold"
+                >
+                  Lupa Kata Sandi?
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setAuthMode('register'); setRegError(''); setRegSuccess(''); setRegEmployeeId(''); setRegFullName(''); setRegEmail(''); setRegPassword(''); }}
+                  className="text-blue-600 dark:text-blue-400 hover:underline font-bold"
+                >
+                  Daftar ID Baru
+                </button>
+              </div>
+
+              {loginError && (
+                <div className="p-3 bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/50 rounded-xl flex items-center gap-2 text-red-600 dark:text-red-400 text-xs font-semibold">
+                  <ShieldAlert size={16} className="shrink-0" />
+                  <span>{loginError}</span>
+                </div>
+              )}
+
+              <button disabled={isLoggingIn} className="w-full bg-indigo-900 dark:bg-indigo-600 text-white font-bold py-4 rounded-2xl hover:bg-black dark:hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 shadow-xl shadow-indigo-100 dark:shadow-none active:scale-95 disabled:opacity-50">
+                {isLoggingIn ? <Loader2 className="animate-spin" size={20} /> : "Login"}
               </button>
-            </div>
-            {loginError && <p className="text-red-500 dark:text-red-400 text-[10px] font-bold text-center uppercase tracking-wide">{loginError}</p>}
-            <button disabled={isLoggingIn} className="w-full bg-indigo-900 dark:bg-indigo-600 text-white font-bold py-4 rounded-2xl hover:bg-black dark:hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 shadow-xl shadow-indigo-100 dark:shadow-none active:scale-95">
-              {isLoggingIn ? <Loader2 className="animate-spin" size={20} /> : "Login"}
-            </button>
-          </form>
+            </form>
+          )}
+
+          {authMode === 'register' && (
+            <form onSubmit={handleRegister} className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="text-center mb-2">
+                <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200">Registrasi ID Karyawan Baru</h2>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500">Lengkapi formulir untuk mendaftarkan akun di sistem internal.</p>
+              </div>
+              
+              <div className="relative">
+                <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-500" size={18} />
+                <input
+                  type="text"
+                  placeholder="ID Karyawan (cth: KRY-09228)"
+                  className="w-full bg-slate-50 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-700 rounded-xl py-4 pl-12 pr-4 text-sm focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 outline-none transition-all font-medium text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
+                  value={regEmployeeId}
+                  onChange={e => setRegEmployeeId(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="relative">
+                <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-500" size={18} />
+                <input
+                  type="text"
+                  placeholder="Nama Lengkap Karyawan"
+                  className="w-full bg-slate-50 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-700 rounded-xl py-4 pl-12 pr-4 text-sm focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 outline-none transition-all font-medium text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
+                  value={regFullName}
+                  onChange={e => setRegFullName(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="relative">
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-500" size={18} />
+                <input
+                  type="email"
+                  placeholder="Email Perusahaan (cth: nama@panin.co.id)"
+                  className="w-full bg-slate-50 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-700 rounded-xl py-4 pl-12 pr-4 text-sm focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 outline-none transition-all font-medium text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
+                  value={regEmail}
+                  onChange={e => setRegEmail(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="relative">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-500" size={18} />
+                <input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Buat Kata Sandi"
+                  className="w-full bg-slate-50 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-700 rounded-xl py-4 pl-12 pr-12 text-sm focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 outline-none transition-all font-medium text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
+                  value={regPassword}
+                  onChange={e => setRegPassword(e.target.value)}
+                  required
+                />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition">
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+
+              {regError && (
+                <div className="p-3 bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/50 rounded-xl flex items-center gap-2 text-red-600 dark:text-red-400 text-xs font-semibold">
+                  <ShieldAlert size={16} className="shrink-0" />
+                  <span>{regError}</span>
+                </div>
+              )}
+
+              {regSuccess && (
+                <div className="p-3 bg-green-50 dark:bg-green-950/30 border border-green-100 dark:border-green-900/50 rounded-xl flex items-center gap-2 text-green-600 dark:text-green-400 text-xs font-semibold animate-pulse">
+                  <CheckCircle2 size={16} className="shrink-0" />
+                  <span>{regSuccess}</span>
+                </div>
+              )}
+
+              <button disabled={isRegistering} className="w-full bg-blue-900 dark:bg-blue-600 text-white font-bold py-4 rounded-2xl hover:bg-black dark:hover:bg-blue-700 transition-all flex items-center justify-center gap-2 shadow-xl shadow-blue-100 dark:shadow-none active:scale-95 disabled:opacity-50">
+                {isRegistering ? <Loader2 className="animate-spin" size={20} /> : "Daftar Akun Baru"}
+              </button>
+
+              <div className="text-center mt-2">
+                <button
+                  type="button"
+                  onClick={() => { setAuthMode('login'); setLoginError(''); }}
+                  className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-bold"
+                >
+                  Sudah punya akun? Kembali ke Login
+                </button>
+              </div>
+            </form>
+          )}
+
+          {authMode === 'forgot' && (
+            <form onSubmit={handleForgotPassword} className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="text-center mb-2">
+                <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200">Pemulihan Kata Sandi</h2>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500">Masukkan ID Karyawan atau Email perusahaan Anda untuk verifikasi.</p>
+              </div>
+
+              <div className="relative">
+                <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-500" size={18} />
+                <input
+                  type="text"
+                  placeholder="ID Karyawan / Email Perusahaan"
+                  className="w-full bg-slate-50 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-700 rounded-xl py-4 pl-12 pr-4 text-sm focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 outline-none transition-all font-medium text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
+                  value={forgotInput}
+                  onChange={e => setForgotInput(e.target.value)}
+                  required
+                />
+              </div>
+
+              {forgotError && (
+                <div className="p-3 bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/50 rounded-xl flex items-center gap-2 text-red-600 dark:text-red-400 text-xs font-semibold">
+                  <ShieldAlert size={16} className="shrink-0" />
+                  <span>{forgotError}</span>
+                </div>
+              )}
+
+              {forgotSuccess && (
+                <div className="p-3 bg-green-50 dark:bg-green-950/30 border border-green-100 dark:border-green-900/50 rounded-xl flex items-center gap-2 text-green-600 dark:text-green-400 text-xs font-semibold">
+                  <CheckCircle2 size={16} className="shrink-0" />
+                  <span>{forgotSuccess}</span>
+                </div>
+              )}
+
+              <button disabled={isSendingForgot} className="w-full bg-indigo-900 dark:bg-indigo-600 text-white font-bold py-4 rounded-2xl hover:bg-black dark:hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 shadow-xl shadow-indigo-100 dark:shadow-none active:scale-95 disabled:opacity-50">
+                {isSendingForgot ? <Loader2 className="animate-spin" size={20} /> : "Kirim Link Pemulihan"}
+              </button>
+
+              <div className="text-center mt-2">
+                <button
+                  type="button"
+                  onClick={() => { setAuthMode('login'); setLoginError(''); }}
+                  className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-bold"
+                >
+                  Kembali ke Halaman Login
+                </button>
+              </div>
+            </form>
+          )}
+
           <div className="mt-8 pt-6 border-t border-slate-50 dark:border-slate-700/50 text-center">
             <p className="text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest leading-loose">
               Sistem Terenkripsi & Dipantau <br /> Bank Panin Cybersecurity Division
@@ -1191,7 +1538,7 @@ const App = () => {
         </nav>
         <div className="mt-auto pt-6 border-t border-indigo-900 dark:border-slate-800 px-2">
           <button
-            onClick={() => { setIsLoggedIn(false); setIsMobileMenuOpen(false); }}
+            onClick={() => { setIsLoggedIn(false); setCurrentUser(null); setIsMobileMenuOpen(false); }}
             className="text-[10px] font-black text-red-500 uppercase tracking-widest hover:text-white transition"
           >
             Log out
@@ -1240,7 +1587,7 @@ const App = () => {
             </nav>
             <div className="mt-auto pt-6 border-t border-indigo-900 dark:border-slate-800 px-2">
               <button
-                onClick={() => { setIsLoggedIn(false); setIsMobileMenuOpen(false); }}
+                onClick={() => { setIsLoggedIn(false); setCurrentUser(null); setIsMobileMenuOpen(false); }}
                 className="text-[10px] font-black text-red-500 uppercase tracking-widest hover:text-white transition"
               >
                 Log out
@@ -1278,7 +1625,7 @@ const App = () => {
               <p className={`text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest transition-all duration-300 ${
                 isHeaderScrolled ? 'text-[6px] sm:text-[8px] mt-0.5' : 'text-[8px] sm:text-[10px] mt-1'
               }`}>
-                User: Maulana Yusup Wijaya • ID: {employeeId}
+                User: {currentUser?.fullName || 'Maulana Yusup Wijaya'} • ID: {currentUser?.employeeId || employeeId}
               </p>
             </div>
           </div>
@@ -2310,6 +2657,24 @@ const App = () => {
                             </button>
                           )}
 
+                          <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-700 border border-slate-100 dark:border-slate-600 rounded-xl px-3 py-1.5 text-xs text-slate-500 dark:text-slate-400 font-semibold shrink-0">
+                            <span>Urutan:</span>
+                            <span className="text-indigo-600 dark:text-indigo-400 font-bold">
+                              {sortField === 'destructionYear' && 'Tahun Musnah'}
+                              {sortField === 'classificationCode' && 'Kode Klasifikasi'}
+                              {sortField === 'title' && 'Judul Arsip'}
+                              {sortField === 'startDate' && 'Tahun Awal'}
+                              {sortField === 'endDate' && 'Tahun Akhir'}
+                              {sortField === 'jra' && 'JRA'}
+                              {sortField === 'mediaNumber' && 'No. Media'}
+                              {sortField === 'boxNumber' && 'No. Kotak'}
+                              {!sortField && 'Bawaan'}
+                            </span>
+                            <span className="text-[9px] bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 px-1.5 py-0.5 rounded font-black">
+                              {sortOrder === 'asc' ? 'ASC' : 'DESC'}
+                            </span>
+                          </div>
+
                           <div className="relative flex items-center bg-slate-50 dark:bg-slate-700 border border-slate-100 dark:border-slate-600 rounded-xl px-3 py-1.5 shrink-0">
                             <Search size={14} className="text-slate-400" />
                             <input
@@ -2329,14 +2694,94 @@ const App = () => {
                           <thead>
                             <tr className="border-b border-slate-100 dark:border-slate-700 text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider bg-slate-50/50 dark:bg-slate-900/10">
                               <th className="p-4 text-center w-28">No / Aksi</th>
-                              <th className="p-4">Kode Klasifikasi</th>
-                              <th className="p-4">Masalah / Judul Arsip</th>
-                              <th className="p-4 text-center">Tahun Awal</th>
-                              <th className="p-4 text-center">Tahun Akhir</th>
-                              <th className="p-4 text-center">JRA</th>
-                              <th className="p-4 text-center">Tahun Musnah</th>
-                              <th className="p-4 text-center">No. Media</th>
-                              <th className="p-4 text-center">No. Kotak</th>
+                              <th 
+                                className="p-4 cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-850 select-none transition-colors"
+                                onClick={() => handleSort('classificationCode')}
+                              >
+                                <div className="flex items-center gap-1.5">
+                                  <span>Kode Klasifikasi</span>
+                                  <span className="text-[10px] text-indigo-500 font-bold">
+                                    {sortField === 'classificationCode' ? (sortOrder === 'asc' ? '▲' : '▼') : '↕'}
+                                  </span>
+                                </div>
+                              </th>
+                              <th 
+                                className="p-4 cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-850 select-none transition-colors"
+                                onClick={() => handleSort('title')}
+                              >
+                                <div className="flex items-center gap-1.5">
+                                  <span>Masalah / Judul Arsip</span>
+                                  <span className="text-[10px] text-indigo-500 font-bold">
+                                    {sortField === 'title' ? (sortOrder === 'asc' ? '▲' : '▼') : '↕'}
+                                  </span>
+                                </div>
+                              </th>
+                              <th 
+                                className="p-4 text-center cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-850 select-none transition-colors"
+                                onClick={() => handleSort('startDate')}
+                              >
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <span>Tahun Awal</span>
+                                  <span className="text-[10px] text-indigo-500 font-bold">
+                                    {sortField === 'startDate' ? (sortOrder === 'asc' ? '▲' : '▼') : '↕'}
+                                  </span>
+                                </div>
+                              </th>
+                              <th 
+                                className="p-4 text-center cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-850 select-none transition-colors"
+                                onClick={() => handleSort('endDate')}
+                              >
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <span>Tahun Akhir</span>
+                                  <span className="text-[10px] text-indigo-500 font-bold">
+                                    {sortField === 'endDate' ? (sortOrder === 'asc' ? '▲' : '▼') : '↕'}
+                                  </span>
+                                </div>
+                              </th>
+                              <th 
+                                className="p-4 text-center cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-850 select-none transition-colors"
+                                onClick={() => handleSort('jra')}
+                              >
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <span>JRA</span>
+                                  <span className="text-[10px] text-indigo-500 font-bold">
+                                    {sortField === 'jra' ? (sortOrder === 'asc' ? '▲' : '▼') : '↕'}
+                                  </span>
+                                </div>
+                              </th>
+                              <th 
+                                className="p-4 text-center cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-850 select-none transition-colors"
+                                onClick={() => handleSort('destructionYear')}
+                              >
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <span>Tahun Musnah</span>
+                                  <span className="text-[10px] text-indigo-500 font-bold">
+                                    {sortField === 'destructionYear' ? (sortOrder === 'asc' ? '▲' : '▼') : '↕'}
+                                  </span>
+                                </div>
+                              </th>
+                              <th 
+                                className="p-4 text-center cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-850 select-none transition-colors"
+                                onClick={() => handleSort('mediaNumber')}
+                              >
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <span>No. Media</span>
+                                  <span className="text-[10px] text-indigo-500 font-bold">
+                                    {sortField === 'mediaNumber' ? (sortOrder === 'asc' ? '▲' : '▼') : '↕'}
+                                  </span>
+                                </div>
+                              </th>
+                              <th 
+                                className="p-4 text-center cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-850 select-none transition-colors"
+                                onClick={() => handleSort('boxNumber')}
+                              >
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <span>No. Kotak</span>
+                                  <span className="text-[10px] text-indigo-500 font-bold">
+                                    {sortField === 'boxNumber' ? (sortOrder === 'asc' ? '▲' : '▼') : '↕'}
+                                  </span>
+                                </div>
+                              </th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-50 dark:divide-slate-700/50">
