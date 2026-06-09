@@ -223,6 +223,14 @@ const App = () => {
   const [profileError, setProfileError] = useState('');
   const [profileSuccess, setProfileSuccess] = useState('');
 
+  // --- STATE FOTO CROP / ADJUSTMENT ---
+  const [cropSrc, setCropSrc] = useState('');
+  const [isCropping, setIsCropping] = useState(false);
+  const [cropZoom, setCropZoom] = useState(1);
+  const [cropPosition, setCropPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+
   // --- STATE SMART ECM ---
   const [ecmSearch, setEcmSearch] = useState('');
   const [selectedDoc, setSelectedDoc] = useState(null);
@@ -3477,7 +3485,10 @@ const App = () => {
                         if (file) {
                           const reader = new FileReader();
                           reader.onloadend = () => {
-                            setProfileAvatar(reader.result);
+                            setCropSrc(reader.result);
+                            setCropZoom(1);
+                            setCropPosition({ x: 0, y: 0 });
+                            setIsCropping(true);
                           };
                           reader.readAsDataURL(file);
                         }
@@ -3567,6 +3578,156 @@ const App = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Crop Foto Profil */}
+      {isCropping && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl max-w-sm w-full shadow-2xl border border-slate-100 dark:border-slate-700 overflow-hidden animate-in zoom-in-95 duration-300 flex flex-col items-center p-6 text-center">
+            
+            {/* Header */}
+            <h3 className="text-sm font-black uppercase text-indigo-950 dark:text-white tracking-wider mb-2 flex items-center gap-2">
+              <Sparkles size={16} className="text-orange-400" /> Sesuaikan Foto
+            </h3>
+            <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wide mb-6">
+              Geser dan perbesar foto agar pas di dalam lingkaran
+            </p>
+            
+            {/* Cropping Container Frame */}
+            <div 
+              className="relative overflow-hidden w-48 h-48 rounded-full border-4 border-indigo-600 dark:border-indigo-500 shadow-lg cursor-move select-none bg-slate-100 dark:bg-slate-700 flex items-center justify-center"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                setIsDragging(true);
+                setDragStart({
+                  x: e.clientX - cropPosition.x,
+                  y: e.clientY - cropPosition.y
+                });
+              }}
+              onMouseMove={(e) => {
+                if (!isDragging) return;
+                setCropPosition({
+                  x: e.clientX - dragStart.x,
+                  y: e.clientY - dragStart.y
+                });
+              }}
+              onMouseUp={() => setIsDragging(false)}
+              onMouseLeave={() => setIsDragging(false)}
+              onTouchStart={(e) => {
+                setIsDragging(true);
+                const touch = e.touches[0];
+                setDragStart({
+                  x: touch.clientX - cropPosition.x,
+                  y: touch.clientY - cropPosition.y
+                });
+              }}
+              onTouchMove={(e) => {
+                if (!isDragging) return;
+                const touch = e.touches[0];
+                setCropPosition({
+                  x: touch.clientX - dragStart.x,
+                  y: touch.clientY - dragStart.y
+                });
+              }}
+              onTouchEnd={() => setIsDragging(false)}
+            >
+              <img 
+                src={cropSrc} 
+                alt="Pratinjau Crop" 
+                className="pointer-events-none select-none max-w-none origin-center"
+                style={{ 
+                  transform: `translate(${cropPosition.x}px, ${cropPosition.y}px) scale(${cropZoom})`, 
+                  width: '100%', 
+                  height: '100%', 
+                  objectFit: 'cover' 
+                }} 
+              />
+              
+              {/* Circular guide outline on top */}
+              <div className="absolute inset-0 rounded-full border border-white/20 pointer-events-none"></div>
+            </div>
+
+            {/* Slider zoom */}
+            <div className="w-full mt-6 px-4 space-y-2">
+              <div className="flex justify-between items-center text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">
+                <span>Perkecil</span>
+                <span className="text-indigo-600 dark:text-indigo-400 font-black">{Math.round(cropZoom * 100)}%</span>
+                <span>Perbesar</span>
+              </div>
+              <input 
+                type="range" 
+                min="1" 
+                max="3" 
+                step="0.01"
+                className="w-full h-1 bg-slate-100 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-600 dark:accent-indigo-500"
+                value={cropZoom}
+                onChange={(e) => setCropZoom(parseFloat(e.target.value))}
+              />
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3 w-full mt-8">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCropping(false);
+                  setCropSrc('');
+                }}
+                className="flex-1 py-3 bg-slate-50 hover:bg-slate-100 dark:bg-slate-700 dark:hover:bg-slate-650 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-black uppercase tracking-widest transition border border-slate-200 dark:border-slate-600"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  // Perform Crop on hidden Canvas
+                  const canvas = document.createElement('canvas');
+                  canvas.width = 150;
+                  canvas.height = 150;
+                  const ctx = canvas.getContext('2d');
+                  
+                  // Fill white background in case of transparent PNGs
+                  ctx.fillStyle = '#ffffff';
+                  ctx.fillRect(0, 0, 150, 150);
+                  
+                  const img = new Image();
+                  img.src = cropSrc;
+                  img.onload = () => {
+                    const F = 192; // UI container width in pixels
+                    const C = 150; // Canvas dimensions
+                    const R = C / F; // Scaling ratio
+                    
+                    const W = img.width;
+                    const H = img.height;
+                    const s0 = Math.max(F / W, F / H); // Base cover scale
+                    
+                    const baseWidth = W * s0;
+                    const baseHeight = H * s0;
+                    
+                    const drawWidth = baseWidth * cropZoom * R;
+                    const drawHeight = baseHeight * cropZoom * R;
+                    
+                    // Center point on canvas + scaled offset
+                    const cx = C / 2 + cropPosition.x * R;
+                    const cy = C / 2 + cropPosition.y * R;
+                    
+                    ctx.drawImage(img, cx - drawWidth / 2, cy - drawHeight / 2, drawWidth, drawHeight);
+                    
+                    // Compress as JPEG at 0.75 quality for lightweight size
+                    const croppedBase64 = canvas.toDataURL('image/jpeg', 0.75);
+                    setProfileAvatar(croppedBase64);
+                    setIsCropping(false);
+                    setCropSrc('');
+                  };
+                }}
+                className="flex-1 py-3 bg-indigo-900 dark:bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest transition shadow-md hover:bg-black dark:hover:bg-indigo-700 active:scale-98"
+              >
+                Terapkan
+              </button>
+            </div>
+            
           </div>
         </div>
       )}

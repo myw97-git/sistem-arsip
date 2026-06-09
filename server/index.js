@@ -51,7 +51,8 @@ app.use(cors({
 }));
 
 // Parse JSON request bodies
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // --- ENDPOINT: REGISTER AKUN KARYAWAN ---
 app.post('/api/auth/register', async (req, res) => {
