@@ -211,6 +211,8 @@ const App = () => {
   const [printBoxNumber, setPrintBoxNumber] = useState(null); // Menyimpan no kotak yang akan dicetak
   const [sortField, setSortField] = useState('destructionYear');
   const [sortOrder, setSortOrder] = useState('desc');
+  const [classSearchQuery, setClassSearchQuery] = useState('');
+  const [isClassDropdownOpen, setIsClassDropdownOpen] = useState(false);
 
   // --- STATE SMART ECM ---
   const [ecmSearch, setEcmSearch] = useState('');
@@ -978,7 +980,18 @@ const App = () => {
   // --- HANDLER EDIT ARSIP FISIK ---
   const handleStartEdit = (item) => {
     setEditingItem(item);
-    setClassMode('manual');
+    
+    const matched = CLASSIFICATION_MASTER.find(c => (c.codeActual || c.code) === item.classificationCode);
+    if (matched) {
+      setClassMode('select');
+      setSelectedPreset(matched.code);
+      setClassSearchQuery(`${matched.code} - ${matched.title}`);
+    } else {
+      setClassMode('manual');
+      setSelectedPreset('');
+      setClassSearchQuery('');
+    }
+
     setNewClassification(item.classificationCode);
     setNewTitle(item.title);
     setNewStartDate(item.startDate || '');
@@ -1004,6 +1017,8 @@ const App = () => {
     setNewBoxNumber('');
     setNewUnitCategory('BAN/BSE');
     setClassMode('select');
+    setClassSearchQuery('');
+    setIsClassDropdownOpen(false);
   };
 
   // --- HANDLER ARSIP FISIK BARU / UPDATE ---
@@ -1066,6 +1081,8 @@ const App = () => {
       setNewStartDate('');
       setNewEndDate('');
       setSelectedPreset('');
+      setClassSearchQuery('');
+      setIsClassDropdownOpen(false);
       setNewMediaNumber(prev => prev ? parseInt(prev, 10) + 1 : '');
     }
   };
@@ -1242,6 +1259,15 @@ const App = () => {
       if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
       return 0;
     });
+
+  // Filter presets klasifikasi untuk combobox pencarian
+  const filteredPresets = CLASSIFICATION_MASTER.filter(c => {
+    const query = (classSearchQuery || '').toLowerCase().trim();
+    if (!query) return true;
+    return c.code.toLowerCase().includes(query) || 
+           c.title.toLowerCase().includes(query) ||
+           `${c.code} - ${c.title}`.toLowerCase().includes(query);
+  });
 
   // Filter ecm documents
   const filteredEcmDocuments = ecmDocuments.filter(doc =>
@@ -2349,25 +2375,70 @@ const App = () => {
                                 Ketik Manual
                               </button>
                             </div>
-                            <select
-                              className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-100 dark:border-slate-600 rounded-xl py-3 px-3 text-xs font-semibold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-indigo-600"
-                              value={selectedPreset}
-                              onChange={e => {
-                                const val = e.target.value;
-                                setSelectedPreset(val);
-                                const selected = CLASSIFICATION_MASTER.find(c => c.code === val);
-                                if (selected) {
-                                  setNewClassification(selected.codeActual || selected.code);
-                                  setNewTitle(selected.title);
-                                  setNewJra(String(selected.defaultJra));
-                                }
-                              }}
-                            >
-                              <option value="" disabled>-- Pilih Klasifikasi --</option>
-                              {CLASSIFICATION_MASTER.map(c => (
-                                <option key={c.code} value={c.code}>{c.code} - {c.title}</option>
-                              ))}
-                            </select>
+                             <div className="relative">
+                              {/* Click catcher overlay to dismiss dropdown when user clicks outside */}
+                              {isClassDropdownOpen && (
+                                <div 
+                                  className="fixed inset-0 z-40 bg-transparent" 
+                                  onClick={() => setIsClassDropdownOpen(false)}
+                                />
+                              )}
+                              
+                              <div className="relative z-50">
+                                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" size={14} />
+                                <input
+                                  type="text"
+                                  placeholder="Cari kode/judul klasifikasi..."
+                                  className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-100 dark:border-slate-600 rounded-xl py-3 pl-10 pr-10 text-xs font-semibold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-indigo-600"
+                                  value={classSearchQuery}
+                                  onChange={e => {
+                                    setClassSearchQuery(e.target.value);
+                                    setIsClassDropdownOpen(true);
+                                  }}
+                                  onFocus={() => setIsClassDropdownOpen(true)}
+                                />
+                                {classSearchQuery && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setClassSearchQuery('');
+                                      setSelectedPreset('');
+                                      setNewClassification('');
+                                      setNewTitle('');
+                                      setIsClassDropdownOpen(true);
+                                    }}
+                                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                )}
+                              </div>
+
+                              {isClassDropdownOpen && (
+                                <div className="absolute z-50 w-full mt-1.5 max-h-60 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl divide-y divide-slate-50 dark:divide-slate-700/50">
+                                  {filteredPresets.length > 0 ? (
+                                    filteredPresets.map(c => (
+                                      <div
+                                        key={c.code}
+                                        className="p-3 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer transition-colors duration-150 text-left"
+                                        onClick={() => {
+                                          setSelectedPreset(c.code);
+                                          setNewClassification(c.codeActual || c.code);
+                                          setNewTitle(c.title);
+                                          setNewJra(String(c.defaultJra));
+                                          setClassSearchQuery(`${c.code} - ${c.title}`);
+                                          setIsClassDropdownOpen(false);
+                                        }}
+                                      >
+                                        <span className="font-bold text-indigo-600 dark:text-indigo-400 font-mono mr-1.5">{c.code}</span> - {c.title}
+                                      </div>
+                                    ))
+                                  ) : (
+                                    <div className="p-3 text-xs text-slate-400 dark:text-slate-500 italic text-center">Tidak ditemukan klasifikasi yang cocok</div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         ) : (
                           <div>
